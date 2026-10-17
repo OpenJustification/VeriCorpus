@@ -1,0 +1,62 @@
+{
+  "format": "vericorpus-reference-model-registry-v1",
+  "verified_on": "2026-10-17",
+  "policy": "Only actually integrated reference engines with clear AGPL-compatible licensing are listed. Optional/staged adjudicators live in local-models.json and are not part of the reference profile.",
+  "models": [
+    {
+      "id": "PaddlePaddle/PaddleOCR-VL-1.6",
+      "role": "primary_document_ocr",
+      "license": "Apache-2.0",
+      "revision": "c5630abae1d940eafe0697512a0325494b02ab42",
+      "revision_policy": "catalogued upstream revision; Paddle-managed local cache bytes are fingerprinted per run and strict locks verify cache SHA-256 before/after processing",
+      "bundled": false,
+      "implemented": true,
+      "upstream": "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6"
+    },
+    {
+      "id": "zai-org/GLM-OCR",
+      "role": "optional_independent_document_ocr",
+      "license": "MIT",
+      "code_license": "Apache-2.0",
+      "revision_policy": "pin exact self-hosted model and SDK revisions before verified-profile production use",
+      "bundled": false,
+      "implemented": true,
+      "upstream": "https://github.com/zai-org/GLM-OCR"
+    },
+    {
+      "id": "allenai/olmOCR-2-7B-1025-FP8",
+      "role": "optional_llm_training_pdf_linearization",
+      "license": "Apache-2.0",
+      "revision_policy": "pin exact model and olmocr package revisions before verified-profile production use",
+      "bundled": false,
+      "implemented": true,
+      "upstream": "https://github.com/allenai/olmocr"
+    }
+  ],
+  "software": [
+    {
+      "id": "PyMuPDF",
+      "role": "native_pdf_extraction",
+      "license": "AGPL-3.0-or-later or commercial upstream",
+      "bundled": true,
+      "implemented": true,
+      "upstream": "https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright"
+    },
+    {
+      "id": "Tesseract OCR",
+      "role": "optional_classical_independent_ocr",
+      "license": "Apache-2.0",
+      "bundled": false,
+      "implemented": true,
+      "upstream": "https://github.com/tesseract-ocr/tesseract"
+    },
+    {
+      "id": "Docling",
+      "role": "document_structure",
+      "license": "MIT",
+      "bundled": true,
+      "implemented": true,
+      "upstream": "https://github.com/docling-project/docling"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "format": "vericorpus-model-lock-v1",
+  "created": "REPLACE_WITH_UTC_TIMESTAMP",
+  "models": {
+    "PaddlePaddle/PaddleOCR-VL-1.6": {
+      "revision": "c5630abae1d940eafe0697512a0325494b02ab42"
+    }
+  },
+  "cache_fingerprints": {
+    "paddlex": {
+      "sha256": "REPLACE_WITH_SHA256_FROM_A_PRIOR_MANIFEST"
+    },
+    "huggingface": {
+      "sha256": "REPLACE_WITH_SHA256_FROM_A_PRIOR_MANIFEST"
+    }
+  }
+}

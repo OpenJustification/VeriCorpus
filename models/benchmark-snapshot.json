@@ -1,0 +1,42 @@
+{
+  "format": "vericorpus-benchmark-snapshot-v1",
+  "snapshot_date": "2026-10-17",
+  "benchmark": "OmniDocBench v1.6_full",
+  "source": "https://github.com/opendatalab/OmniDocBench",
+  "metric": "Overall (higher is better)",
+  "selected_rows": [
+    {
+      "model": "TeleOCR",
+      "parameters": "1.2B",
+      "overall": 96.91,
+      "license": "Apache-2.0",
+      "status": "tracked-not-default",
+      "reason": "Highest current maintainer-leaderboard score, but upstream runtime currently relies on custom model code and a heavier/less portable stack; not used as the Windows default until its pinned local path is security/integration tested."
+    },
+    {
+      "model": "OvisOCR2",
+      "parameters": "0.8B/0.9B class",
+      "overall": 96.47,
+      "license": "Apache-2.0",
+      "status": "tracked-for-next-integration",
+      "reason": "Very strong compact standard-Transformers model; attractive future independent parser after local Windows integration tests."
+    },
+    {
+      "model": "PaddleOCR-VL-1.6",
+      "parameters": "0.9B",
+      "overall": 96.34,
+      "license": "Apache-2.0",
+      "status": "active-default",
+      "reason": "Top-tier benchmark performance plus mature PaddleOCR pipeline, local model caching, and practical portable integration."
+    },
+    {
+      "model": "GLM-OCR",
+      "parameters": "0.9B",
+      "overall": 95.22,
+      "license": "MIT weights / Apache-2.0 code",
+      "status": "active-optional-verified",
+      "reason": "Independent model family used as an optional verifier when self-hosted locally."
+    }
+  ],
+  "selection_policy": "VeriCorpus does not equate leaderboard rank with release suitability. Default tools must also satisfy local execution, license clarity, reproducibility, security, maintainability, and Windows portability."
+}

@@ -1,44 +1,46 @@
-VeriCorpus 0.1.0 CI Fix
+VeriCorpus 0.1.0 — Models CI Fix
 
-The GitHub Actions run #39024494911 exposed these issues:
+WHY THE DESKTOP BUILD FAILED
+----------------------------
+The GitHub Actions "Source smoke test" step runs:
+  1. python -m vericorpus.desktop --self-test
+  2. python scripts/release_check.py
+  3. python scripts/license_check.py
 
-1. Windows:
-   Python 3.12.15 is not available from actions/setup-python on the Windows 2025 runner.
-   This patch uses Python 3.12.10, the final Python 3.12 bugfix release with normal
-   Windows binary availability.
+The desktop self-test is okay.
 
-2. Linux FULL:
-   requirements-bundle-full.txt pinned huggingface-hub==2.2.0.
-   Docling 2.140.0's standard/model stack requires huggingface-hub<2.
-   This patch pins huggingface-hub==1.33.0.
+The repository's .gitignore ignored the entire `models/` directory, so GitHub
+Desktop did not upload these required release metadata files:
 
-3. GitHub Actions:
-   Old action majors emitted Node.js 20 deprecation warnings.
-   This patch updates:
-     actions/checkout -> v7
-     actions/setup-python -> v7
-     actions/upload-artifact -> v7
-     actions/download-artifact -> v8
-     actions/attest-build-provenance -> v4
+  models/benchmark-snapshot.json
+  models/reference-open.json
+  models/model-lock.example.json
 
-4. Desktop dependency install:
-   Adds set -euxo pipefail, version output, --prefer-binary, and pip check so any
-   future resolver/package problem is much easier to diagnose.
+release_check.py requires all three, and license_check.py reads
+models/reference-open.json. Their absence makes the whole "Source smoke test"
+step exit with code 1.
 
-HOW TO APPLY WITH GITHUB DESKTOP
---------------------------------
-Copy the CONTENTS of this patch folder into your local VeriCorpus repository.
-Allow Windows to replace the existing files.
-Then in GitHub Desktop:
-  Summary: Fix cross-platform desktop build
-  Commit to main
-  Push origin
+THIS PATCH
+----------
+- changes .gitignore so only small model metadata JSON files are tracked;
+- continues to ignore large model weights/caches;
+- adds the three required model metadata files.
 
-Then GitHub -> Actions -> Desktop bundles -> Run workflow.
+HOW TO APPLY
+------------
+1. Extract this ZIP.
+2. Copy `.gitignore` and the `models` folder into your local VeriCorpus repo.
+3. Choose Replace/Merge when Windows asks.
+4. Open GitHub Desktop.
+5. Confirm you see these four changes:
+     .gitignore
+     models/benchmark-snapshot.json
+     models/reference-open.json
+     models/model-lock.example.json
+6. Commit with:
+     Fix tracked model metadata for CI
+7. Push origin.
+8. GitHub -> Actions -> Desktop bundles -> Run workflow.
 
-Files replaced:
-  .github/workflows/ci.yml
-  .github/workflows/dco.yml
-  .github/workflows/desktop-build.yml
-  .github/workflows/release.yml
-  packaging/requirements-bundle-full.txt
+Do NOT add downloaded model weights to Git. The updated .gitignore continues
+to ignore *.safetensors, *.gguf, *.onnx, *.bin, *.pt, *.pth and cache/.

@@ -56,8 +56,17 @@ output/
 *.log
 
 # Large local model/data caches
-models/
+# Keep small VeriCorpus model registry/lock metadata in Git.
+models/*
+!models/benchmark-snapshot.json
+!models/reference-open.json
+!models/model-lock.example.json
+
 cache/
 *.onnx
 *.safetensors
 *.ckpt
+*.gguf
+*.bin
+*.pt
+*.pth
