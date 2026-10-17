@@ -176,12 +176,12 @@ jobs:
           tar -C dist -czf "$name.tar.gz" VeriCorpus
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
 
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         if: runner.os == 'Windows'
         with:
           subject-path: VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.zip
 
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         if: runner.os == 'Linux'
         with:
           subject-path: VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz
