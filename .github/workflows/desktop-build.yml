@@ -81,7 +81,18 @@ jobs:
         env:
           VERICORPUS_BUNDLE: ${{ matrix.flavor }}
         run: |
-          python -m PyInstaller --noconfirm --clean packaging/vericorpus.spec
+          set -euxo pipefail
+          python scripts/build_desktop.py --flavor "${{ matrix.flavor }}"
+
+      - name: Upload PyInstaller diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pyinstaller-diagnostics-${{ matrix.platform }}-${{ matrix.flavor }}
+          path: |
+            build/
+            *.log
+          if-no-files-found: ignore
 
       - name: Add release documentation and inventories
         shell: bash

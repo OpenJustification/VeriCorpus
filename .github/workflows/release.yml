@@ -92,7 +92,9 @@ jobs:
         shell: bash
         env:
           VERICORPUS_BUNDLE: ${{ matrix.flavor }}
-        run: python -m PyInstaller --noconfirm --clean packaging/vericorpus.spec
+        run: |
+          set -euxo pipefail
+          python scripts/build_desktop.py --flavor "${{ matrix.flavor }}"
 
       - name: Add licenses and build inventory
         shell: bash

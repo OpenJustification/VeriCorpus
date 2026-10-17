@@ -1,46 +1,38 @@
-VeriCorpus 0.1.0 — Models CI Fix
+VeriCorpus 0.1.0 — PyInstaller CI Fix
 
-WHY THE DESKTOP BUILD FAILED
-----------------------------
-The GitHub Actions "Source smoke test" step runs:
-  1. python -m vericorpus.desktop --self-test
-  2. python scripts/release_check.py
-  3. python scripts/license_check.py
+CURRENT FAILURE
+---------------
+The latest run now reaches "Build graphical desktop bundle" and fails there on
+both Windows Lite and Linux Lite.
 
-The desktop self-test is okay.
+This patch removes the custom spec file from the active CI build path.
 
-The repository's .gitignore ignored the entire `models/` directory, so GitHub
-Desktop did not upload these required release metadata files:
+Instead, both desktop workflows call:
 
-  models/benchmark-snapshot.json
-  models/reference-open.json
-  models/model-lock.example.json
+    python scripts/build_desktop.py --flavor lite|full
 
-release_check.py requires all three, and license_check.py reads
-models/reference-open.json. Their absence makes the whole "Source smoke test"
-step exit with code 1.
+The script invokes PyInstaller using explicit cross-platform options and prints
+all build arguments directly into the GitHub Actions log.
 
-THIS PATCH
-----------
-- changes .gitignore so only small model metadata JSON files are tracked;
-- continues to ignore large model weights/caches;
-- adds the three required model metadata files.
+It also verifies that dist/VeriCorpus is actually created.
+
+FILES TO REPLACE/ADD
+--------------------
+.github/workflows/desktop-build.yml
+.github/workflows/release.yml
+scripts/build_desktop.py
 
 HOW TO APPLY
 ------------
 1. Extract this ZIP.
-2. Copy `.gitignore` and the `models` folder into your local VeriCorpus repo.
-3. Choose Replace/Merge when Windows asks.
-4. Open GitHub Desktop.
-5. Confirm you see these four changes:
-     .gitignore
-     models/benchmark-snapshot.json
-     models/reference-open.json
-     models/model-lock.example.json
-6. Commit with:
-     Fix tracked model metadata for CI
-7. Push origin.
-8. GitHub -> Actions -> Desktop bundles -> Run workflow.
+2. Copy its contents into your local VeriCorpus repository.
+3. Replace existing workflow files when asked.
+4. In GitHub Desktop confirm the three changed/new files.
+5. Commit:
+       Fix PyInstaller desktop build
+6. Push origin.
+7. GitHub -> Actions -> Desktop bundles -> Run workflow.
 
-Do NOT add downloaded model weights to Git. The updated .gitignore continues
-to ignore *.safetensors, *.gguf, *.onnx, *.bin, *.pt, *.pth and cache/.
+If PyInstaller still fails, the Actions log will now contain the direct
+PyInstaller traceback/diagnostic output instead of hiding the issue behind the
+custom spec file.
