@@ -1,38 +1,53 @@
-VeriCorpus 0.1.0 — PyInstaller CI Fix
+VeriCorpus 0.1.0 — Windows Windowed EXE Fix
 
-CURRENT FAILURE
----------------
-The latest run now reaches "Build graphical desktop bundle" and fails there on
-both Windows Lite and Linux Lite.
+WHAT FAILED
+-----------
+The latest Windows Lite job successfully:
+- installed dependencies,
+- passed source checks,
+- built the PyInstaller application,
+- added release files.
 
-This patch removes the custom spec file from the active CI build path.
+It then failed at:
+    Smoke-test packaged Windows executable
 
-Instead, both desktop workflows call:
+WHY
+---
+VeriCorpus is intentionally built as a Windows GUI application using
+PyInstaller --windowed/--noconsole.
 
-    python scripts/build_desktop.py --flavor lite|full
+On Windows, PyInstaller sets sys.stdin/sys.stdout/sys.stderr to None in that
+mode. VeriCorpus's packaged self-test (and potentially imported libraries)
+can write to standard streams, which can trigger a NoneType stream error.
 
-The script invokes PyInstaller using explicit cross-platform options and prints
-all build arguments directly into the GitHub Actions log.
+FIX
+---
+packaging/desktop_entry.py now creates harmless os.devnull-backed streams
+BEFORE importing VeriCorpus if the standard streams are unavailable.
 
-It also verifies that dist/VeriCorpus is actually created.
+This is the workaround recommended by PyInstaller for windowed Windows apps.
 
-FILES TO REPLACE/ADD
---------------------
+A regression test simulates missing console streams.
+
+The Windows GitHub smoke-test step also now prints desktop-selftest.json before
+failing, so any future executable error is directly visible in the Actions log.
+
+FILES
+-----
+packaging/desktop_entry.py
+tests/test_windowed_entry.py
 .github/workflows/desktop-build.yml
-.github/workflows/release.yml
-scripts/build_desktop.py
 
-HOW TO APPLY
-------------
+APPLY
+-----
 1. Extract this ZIP.
 2. Copy its contents into your local VeriCorpus repository.
-3. Replace existing workflow files when asked.
-4. In GitHub Desktop confirm the three changed/new files.
-5. Commit:
-       Fix PyInstaller desktop build
+3. Replace packaging/desktop_entry.py and .github/workflows/desktop-build.yml.
+4. Add tests/test_windowed_entry.py.
+5. GitHub Desktop commit:
+       Fix Windows windowed executable self-test
 6. Push origin.
-7. GitHub -> Actions -> Desktop bundles -> Run workflow.
+7. Actions -> Desktop bundles -> Run workflow.
 
-If PyInstaller still fails, the Actions log will now contain the direct
-PyInstaller traceback/diagnostic output instead of hiding the issue behind the
-custom spec file.
+The Linux Lite artifact from the previous run already built successfully, so
+this patch is deliberately Windows-focused.
