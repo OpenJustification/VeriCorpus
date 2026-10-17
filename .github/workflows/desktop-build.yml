@@ -37,11 +37,11 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12.15"
+          python-version: "3.12.10"
           cache: pip
 
       - name: Install Linux desktop system libraries
@@ -53,14 +53,21 @@ jobs:
       - name: Install pinned build/runtime dependencies
         shell: bash
         run: |
+          set -euxo pipefail
+          python --version
+          python -m pip --version
           python -m pip install --upgrade pip
           if [ "${{ matrix.flavor }}" = "full" ]; then
-            python -m pip install -r packaging/requirements-bundle-full.txt --report pip-install-report.json
+            echo "Installing FULL desktop dependency lock"
+            python -m pip install --prefer-binary -r packaging/requirements-bundle-full.txt --report pip-install-report.json
           else
-            python -m pip install -r packaging/requirements-bundle-lite.txt --report pip-install-report.json
+            echo "Installing LITE desktop dependency lock"
+            python -m pip install --prefer-binary -r packaging/requirements-bundle-lite.txt --report pip-install-report.json
           fi
+          python -m pip check
           python -m pip install --no-deps .
           python -m pip install pyinstaller==6.22.3 pip-licenses==5.0.0
+          python -m pip check
 
       - name: Source smoke test
         shell: bash
@@ -162,7 +169,7 @@ jobs:
           tar -C dist -czf "$name.tar.gz" VeriCorpus
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}
           path: |

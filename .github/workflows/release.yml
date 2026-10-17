@@ -14,10 +14,10 @@ jobs:
   verify-source:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12.15"
+          python-version: "3.12.10"
           cache: pip
       - name: Install verification tools
         run: |
@@ -39,7 +39,7 @@ jobs:
           python -m twine check dist/*
           pip-licenses --format=json --output-file=dist/python-license-inventory.json
           cd dist && sha256sum * > SHA256SUMS.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-dist
           path: dist/*
@@ -64,10 +64,10 @@ jobs:
             flavor: full
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12.15"
+          python-version: "3.12.10"
           cache: pip
 
       - name: Install Linux desktop system libraries
@@ -176,17 +176,17 @@ jobs:
           tar -C dist -czf "$name.tar.gz" VeriCorpus
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
 
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         if: runner.os == 'Windows'
         with:
           subject-path: VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.zip
 
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         if: runner.os == 'Linux'
         with:
           subject-path: VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.platform }}-${{ matrix.flavor }}
           path: |
@@ -200,8 +200,8 @@ jobs:
     needs: [verify-source, desktop]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: release-assets
           merge-multiple: true

@@ -1,0 +1,44 @@
+VeriCorpus 0.1.0 CI Fix
+
+The GitHub Actions run #39024494911 exposed these issues:
+
+1. Windows:
+   Python 3.12.15 is not available from actions/setup-python on the Windows 2025 runner.
+   This patch uses Python 3.12.10, the final Python 3.12 bugfix release with normal
+   Windows binary availability.
+
+2. Linux FULL:
+   requirements-bundle-full.txt pinned huggingface-hub==2.2.0.
+   Docling 2.140.0's standard/model stack requires huggingface-hub<2.
+   This patch pins huggingface-hub==1.33.0.
+
+3. GitHub Actions:
+   Old action majors emitted Node.js 20 deprecation warnings.
+   This patch updates:
+     actions/checkout -> v7
+     actions/setup-python -> v7
+     actions/upload-artifact -> v7
+     actions/download-artifact -> v8
+     actions/attest-build-provenance -> v4
+
+4. Desktop dependency install:
+   Adds set -euxo pipefail, version output, --prefer-binary, and pip check so any
+   future resolver/package problem is much easier to diagnose.
+
+HOW TO APPLY WITH GITHUB DESKTOP
+--------------------------------
+Copy the CONTENTS of this patch folder into your local VeriCorpus repository.
+Allow Windows to replace the existing files.
+Then in GitHub Desktop:
+  Summary: Fix cross-platform desktop build
+  Commit to main
+  Push origin
+
+Then GitHub -> Actions -> Desktop bundles -> Run workflow.
+
+Files replaced:
+  .github/workflows/ci.yml
+  .github/workflows/dco.yml
+  .github/workflows/desktop-build.yml
+  .github/workflows/release.yml
+  packaging/requirements-bundle-full.txt
