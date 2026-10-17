@@ -39,7 +39,7 @@ jobs:
           python -m twine check dist/*
           pip-licenses --format=json --output-file=dist/python-license-inventory.json
           cd dist && sha256sum * > SHA256SUMS.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-dist
           path: dist/*
@@ -186,7 +186,7 @@ jobs:
         with:
           subject-path: VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.platform }}-${{ matrix.flavor }}
           path: |
