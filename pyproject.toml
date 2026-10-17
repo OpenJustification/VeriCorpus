@@ -52,7 +52,7 @@ glmocr = ["glmocr>=0.1"]
 olmocr = ["olmocr>=0.2"]
 open-ocr = ["paddleocr==3.7.0", "paddlepaddle==3.3.1", "docling>=2,<3", "glmocr>=0.1", "olmocr>=0.2"]
 judge-qwen = ["transformers>=4.57,<6", "torch>=2.7,<3", "accelerate>=1.8,<2", "huggingface-hub>=0.35,<2"]
-parquet = ["pandas>=2,<4", "pyarrow>=15,<25"]
+parquet = ["pandas>=2,<4", "pyarrow>=15,<27"]
 dev = [
   "build>=1.2,<2",
   "pytest>=8,<10",
@@ -68,7 +68,7 @@ all = [
   "glmocr>=0.1",
   "olmocr>=0.2",
   "pandas>=2,<4",
-  "pyarrow>=15,<25",
+  "pyarrow>=15,<27",
 ]
 
 [project.urls]
