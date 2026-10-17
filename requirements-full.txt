@@ -1,0 +1,5 @@
+# Prefer `pip install -e ".[open-ocr]"`; this file is a convenience list.
+paddleocr>=3.6,<4
+docling>=2,<3
+glmocr>=0.1
+olmocr>=0.2

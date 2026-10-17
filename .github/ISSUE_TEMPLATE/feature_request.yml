@@ -1,0 +1,23 @@
+name: Feature request
+description: Propose an engine, validator, format, or workflow improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What failure mode or workflow should this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence/provenance implications
+      description: How should the feature preserve or strengthen traceability and abstention?

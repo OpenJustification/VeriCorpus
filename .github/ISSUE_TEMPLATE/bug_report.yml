@@ -1,0 +1,46 @@
+name: Bug report
+description: Report incorrect behavior or a reproducible failure.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove sensitive document text, API keys, and private file paths from reports.
+  - type: input
+    id: version
+    attributes:
+      label: VeriCorpus version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and Python version
+      placeholder: "Windows 11, Python 3.12"
+    validations:
+      required: true
+  - type: textarea
+    id: engines
+    attributes:
+      label: Engine status
+      description: Paste the output of `vericorpus doctor` if safe to share.
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true

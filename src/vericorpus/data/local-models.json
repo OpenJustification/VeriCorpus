@@ -1,0 +1,80 @@
+{
+  "format": "vericorpus-local-model-catalog-v1",
+  "verified_on": "2026-10-17",
+  "models": [
+    {
+      "key": "qwen35-4b",
+      "id": "Qwen/Qwen3.5-4B",
+      "revision": "a7b0d22b993d71000cf2eadfb37222a67cee521e",
+      "license": "Apache-2.0",
+      "role": "planned_optional_local_visual_adjudicator",
+      "approx_download_gb": 9.34,
+      "default": false,
+      "redistributed": false,
+      "runtime": "transformers",
+      "downloadable": false,
+      "integration_status": "staged-not-active",
+      "notes": "Kept in the VeriCorpus design. Not downloaded or presented as active until the constrained local visual-adjudicator runtime is integration-tested."
+    },
+    {
+      "key": "nemotron3-nano-4b-q4",
+      "id": "nvidia/NVIDIA-Nemotron-3-Nano-4B-GGUF",
+      "revision": "ba223d14e45525f7fae81db77ea8cabeb2fc6c25",
+      "filename": "NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf",
+      "license": "NVIDIA Nemotron Open Model License",
+      "role": "planned_optional_text_second_opinion",
+      "approx_download_gb": 2.84,
+      "default": false,
+      "redistributed": false,
+      "runtime": "llama.cpp",
+      "downloadable": false,
+      "integration_status": "staged-not-active",
+      "requires_license_acknowledgement": true,
+      "notes": "Kept as an optional second-opinion design target. Never part of the clean-license reference profile and never redistributed."
+    },
+    {
+      "key": "paddleocr-vl-1.6",
+      "id": "PaddlePaddle/PaddleOCR-VL-1.6",
+      "revision": "c5630abae1d940eafe0697512a0325494b02ab42",
+      "license": "Apache-2.0",
+      "role": "primary_document_parser",
+      "approx_download_gb": 1.93,
+      "default": true,
+      "redistributed": false,
+      "runtime": "paddleocr",
+      "downloadable": false,
+      "integration_status": "active",
+      "notes": "Active parser. PaddleOCR manages the complete pipeline cache (including layout components) on the first explicitly online run; subsequent runs can be offline."
+    },
+    {
+      "key": "ovisocr2",
+      "id": "ATH-MaaS/OvisOCR2",
+      "revision": "TRACKED_MAIN_SHORT_1fc9221_NOT_ACTIVE",
+      "license": "Apache-2.0",
+      "role": "tracked_compact_document_parser_candidate",
+      "approx_download_gb": 1.73,
+      "default": false,
+      "redistributed": false,
+      "runtime": "transformers",
+      "downloadable": false,
+      "integration_status": "tracked-not-active",
+      "notes": "Current OmniDocBench maintainer leaderboard places OvisOCR2 just above PaddleOCR-VL 1.6. Tracked for a future portable integration after pinned Windows/GPU/CPU runtime tests.",
+      "revision_policy": "Not used by VeriCorpus 0.1.0; resolve to a full immutable commit before activation."
+    },
+    {
+      "key": "teleocr",
+      "id": "XingChen-AGI/TeleOCR",
+      "revision": "TRACKED_MAIN_SHORT_70a19ec_NOT_ACTIVE",
+      "license": "Apache-2.0",
+      "role": "tracked_benchmark_leading_document_parser_candidate",
+      "approx_download_gb": null,
+      "default": false,
+      "redistributed": false,
+      "runtime": "transformers-custom-code",
+      "downloadable": false,
+      "integration_status": "tracked-not-active",
+      "notes": "Current OmniDocBench maintainer leaderboard leader. Not a default dependency because the upstream path uses custom model code and a less portable runtime; VeriCorpus will not enable it until the exact revision is security- and integration-tested.",
+      "revision_policy": "Not used by VeriCorpus 0.1.0; resolve to a full immutable commit and review custom code before activation."
+    }
+  ]
+}

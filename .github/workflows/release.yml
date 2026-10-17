@@ -1,0 +1,215 @@
+name: GitHub Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  verify-source:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.15"
+          cache: pip
+      - name: Install verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr python3-tk
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      - name: Verify source release
+        run: |
+          python -m compileall -q src scripts packaging
+          python -m ruff check src tests scripts packaging
+          python scripts/release_check.py
+          python scripts/license_check.py
+          python -m pytest -q
+          python -m vericorpus.desktop --self-test
+      - name: Build Python distributions
+        run: |
+          python -m build
+          python -m twine check dist/*
+          pip-licenses --format=json --output-file=dist/python-license-inventory.json
+          cd dist && sha256sum * > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/*
+
+  desktop:
+    needs: verify-source
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: Windows-x64
+            flavor: lite
+          - os: windows-latest
+            platform: Windows-x64
+            flavor: full
+          - os: ubuntu-24.04
+            platform: Linux-x86_64
+            flavor: lite
+          - os: ubuntu-24.04
+            platform: Linux-x86_64
+            flavor: full
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.15"
+          cache: pip
+
+      - name: Install Linux desktop system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk libgl1 libglib2.0-0 libgomp1 tesseract-ocr clamav
+
+      - name: Install desktop build environment
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          if [ "${{ matrix.flavor }}" = "full" ]; then
+            python -m pip install -r packaging/requirements-bundle-full.txt --report pip-install-report.json
+          else
+            python -m pip install -r packaging/requirements-bundle-lite.txt --report pip-install-report.json
+          fi
+          python -m pip install --no-deps .
+          python -m pip install pyinstaller==6.22.3 pip-licenses==5.0.0
+
+      - name: Build desktop application
+        shell: bash
+        env:
+          VERICORPUS_BUNDLE: ${{ matrix.flavor }}
+        run: python -m PyInstaller --noconfirm --clean packaging/vericorpus.spec
+
+      - name: Add licenses and build inventory
+        shell: bash
+        env:
+          BUNDLE_FLAVOR: ${{ matrix.flavor }}
+        run: |
+          cp LICENSE NOTICE THIRD_PARTY_LICENSES.md README.md dist/VeriCorpus/
+          python -m pip freeze > dist/VeriCorpus/python-freeze.txt
+          pip-licenses --format=json --output-file=dist/VeriCorpus/python-license-inventory.json
+          cp pip-install-report.json dist/VeriCorpus/pip-install-report.json
+          python - <<'PY'
+          import json, os, platform, subprocess, sys
+          from pathlib import Path
+          info={
+            "vericorpus":"0.1.0",
+            "git_sha":os.environ.get("GITHUB_SHA","unknown"),
+            "platform":platform.platform(),
+            "machine":platform.machine(),
+            "python":sys.version,
+            "bundle_flavor":os.environ.get("BUNDLE_FLAVOR","unknown"),
+            "pyinstaller":subprocess.check_output([sys.executable,"-m","PyInstaller","--version"],text=True).strip(),
+          }
+          Path("dist/VeriCorpus/BUILD_INFO.json").write_text(json.dumps(info,indent=2,sort_keys=True)+"\n",encoding="utf-8")
+          PY
+
+      - name: Packaged executable self-test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:VERICORPUS_SELFTEST_OUTPUT = "$pwd\desktop-selftest.json"
+          & .\dist\VeriCorpus\VeriCorpus.exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw "Packaged Windows self-test failed" }
+          $r = Get-Content desktop-selftest.json | ConvertFrom-Json
+          if ($r.status -ne "PASS" -or $r.version -ne "0.1.0") { throw "Unexpected self-test result" }
+
+      - name: Microsoft Defender release gate
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $candidates = @("$env:ProgramFiles\Windows Defender\MpCmdRun.exe")
+          $platformRoot = "$env:ProgramData\Microsoft\Windows Defender\Platform"
+          if (Test-Path $platformRoot) {
+            $candidates += Get-ChildItem $platformRoot -Recurse -Filter MpCmdRun.exe -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTime -Descending | ForEach-Object { $_.FullName }
+          }
+          $mp = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $mp) { throw "Microsoft Defender command-line scanner not available on runner" }
+          & $mp -Scan -ScanType 3 -File (Resolve-Path .\dist\VeriCorpus).Path -DisableRemediation
+          if ($LASTEXITCODE -ne 0) { throw "Microsoft Defender scan returned exit code $LASTEXITCODE" }
+
+      - name: Packaged executable self-test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          export VERICORPUS_SELFTEST_OUTPUT="$PWD/desktop-selftest.json"
+          ./dist/VeriCorpus/VeriCorpus --self-test
+          python - <<'PY'
+          import json
+          d=json.load(open('desktop-selftest.json', encoding='utf-8'))
+          assert d['status']=='PASS' and d['version']=='0.1.0', d
+          PY
+
+      - name: ClamAV release gate
+        if: runner.os == 'Linux'
+        run: |
+          sudo freshclam || true
+          clamscan -r --infected --no-summary dist/VeriCorpus
+
+      - name: Archive Windows bundle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $name="VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}"
+          Compress-Archive -Path .\dist\VeriCorpus\* -DestinationPath "$name.zip" -CompressionLevel Optimal
+          $hash=(Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $name.zip" | Out-File -Encoding ascii "$name.zip.sha256"
+
+      - name: Archive Linux bundle
+        if: runner.os == 'Linux'
+        run: |
+          name="VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}"
+          tar -C dist -czf "$name.tar.gz" VeriCorpus
+          sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+
+      - uses: actions/attest-build-provenance@v2
+        if: runner.os == 'Windows'
+        with:
+          subject-path: VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.zip
+
+      - uses: actions/attest-build-provenance@v2
+        if: runner.os == 'Linux'
+        with:
+          subject-path: VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}-${{ matrix.flavor }}
+          path: |
+            VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.zip
+            VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.zip.sha256
+            VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz
+            VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz.sha256
+          if-no-files-found: ignore
+
+  release:
+    needs: [verify-source, desktop]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Create GitHub pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" release-assets/* \
+            --notes-file RELEASE_NOTES_v0.1.0.md \
+            --prerelease \
+            --title "VeriCorpus 0.1.0-alpha — First Public Release"

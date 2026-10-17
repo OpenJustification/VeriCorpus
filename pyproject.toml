@@ -1,0 +1,99 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vericorpus"
+dynamic = ["version"]
+description = "Reproducible, evidence-first, open-model document preparation for auditable LLM training data"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.md"]
+authors = [
+  {name = "VeriCorpus contributors"}
+]
+keywords = [
+  "llm",
+  "training-data",
+  "document-ai",
+  "ocr",
+  "pdf",
+  "data-curation",
+  "provenance",
+  "document-processing"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Text Processing",
+]
+dependencies = [
+  "PyMuPDF>=1.24",
+  "Pillow>=10",
+  "pytesseract>=0.3.13",
+  "pydantic>=2",
+  "typer>=0.12",
+  "rich>=13",
+]
+
+[project.optional-dependencies]
+# Official extras are limited to locally runnable, license-reviewed open components.
+paddle = ["paddleocr==3.7.0", "paddlepaddle==3.3.1"]
+docling = ["docling>=2,<3"]
+glmocr = ["glmocr>=0.1"]
+olmocr = ["olmocr>=0.2"]
+open-ocr = ["paddleocr==3.7.0", "paddlepaddle==3.3.1", "docling>=2,<3", "glmocr>=0.1", "olmocr>=0.2"]
+judge-qwen = ["transformers>=4.57,<6", "torch>=2.7,<3", "accelerate>=1.8,<2", "huggingface-hub>=0.35,<2"]
+parquet = ["pandas>=2,<4", "pyarrow>=15,<25"]
+dev = [
+  "build>=1.2,<2",
+  "pytest>=8,<10",
+  "pytest-cov>=5,<8",
+  "ruff>=0.8,<1",
+  "twine>=5,<7",
+  "pip-licenses>=5,<6",
+]
+all = [
+  "paddleocr==3.7.0",
+  "paddlepaddle==3.3.1",
+  "docling>=2,<3",
+  "glmocr>=0.1",
+  "olmocr>=0.2",
+  "pandas>=2,<4",
+  "pyarrow>=15,<25",
+]
+
+[project.scripts]
+vericorpus = "vericorpus.cli:app"
+
+[project.gui-scripts]
+vericorpus-desktop = "vericorpus.desktop:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "vericorpus.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7"]
+
+[tool.setuptools.package-data]
+"vericorpus.data" = ["*.json"]
