@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-The latest tagged **0.3.x** alpha release is the supported development line.
+The latest tagged **0.2.x** alpha release is the supported development line.
 
 ## Reporting vulnerabilities
 

@@ -1,19 +1,16 @@
 # Changelog
 
+## 0.2.0a1 — consolidated three-profile build (experimental alpha)
+
+- Preserved scientific document-structure detection, equation/table routing, and source-only extraction.
+- Included corpus-integrity exports (source-only pretraining, structured evidence ledgers, review queues, deterministic document-disjoint splits, hash checks and an offline HTML review dashboard).
+- Added three distinct Windows x64 PyInstaller onedir artifacts: Lite, Standard, Verified.
+- Bundles now have a profile marker; desktop GUI defaults to the matching profile and disables unsupported selections.
+- Windows Verified builds stage an independent Tesseract OCR witness and English language data; other optional OCR engines still require separate installation.
+- Added per-artifact EXE smoke testing, bundled-profile verification, Windows Defender scans and SHA-256 checksums in the push-triggered GitHub Actions workflow.
+- This release retains output schema **3.0** to preserve the richer structured training-export fields.
+
 ## 0.1.0 — first public alpha
 
-- First public VeriCorpus release.
-- Added graphical **Windows x64 and Linux x86_64 desktop bundles** in Lite and Full variants.
-- Replaced the earlier self-installing/browser bootstrap design with conventional PyInstaller **onedir** desktop applications; the shipped app does not install Python, run pip, or self-extract at launch.
-- Added `lite`, `standard`, and `verified` processing profiles.
-- Fixed Lite mode so strong born-digital PDF text can be accepted as direct source evidence without requiring a redundant OCR engine.
-- Standard Full desktop stack uses the actually integrated PyMuPDF, PaddleOCR-VL 1.6, and Docling paths.
-- Verified profile can add Tesseract, locally self-hosted GLM-OCR, and local olmOCR when separately installed.
-- Added cross-family extraction consensus so correlated wrappers do not count as independent witnesses.
-- Added relocatable local caches/models/data under `VeriCorpusData` beside packaged desktop binaries.
-- Added staged catalog entries for Qwen3.5-4B and NVIDIA Nemotron 3 Nano 4B without presenting untested adjudicator runtimes as active.
-- Added a dated OmniDocBench tool-selection snapshot; TeleOCR and OvisOCR2 are tracked but not active because public-release defaults also require reproducibility, security review, maintainability, and packaged-platform integration tests.
-- Added immutable input/output hashes, model-lock support, deterministic settings, engine status, and reproducibility manifests.
-- Added AGPL-3.0-or-later licensing, DCO contribution policy, governance, AI contribution policy, and third-party license inventory.
-- Added release-gated packaged-binary self-tests, Microsoft Defender/ClamAV scans, SHA-256 checksums, package/build inventories, and GitHub build-provenance attestations.
-- Public output schema starts at **1.0**.
+- Added conservative PDF extraction and evidence/provenance ledgers.
+- Introduced source verification, local profiles, desktop packaging and AGPL licensing.

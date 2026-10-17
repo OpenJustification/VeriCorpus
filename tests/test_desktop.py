@@ -19,7 +19,7 @@ def test_desktop_self_test_from_source(tmp_path: Path):
     assert cp.returncode == 0, cp.stderr
     text = (tmp_path / "result.json").read_text(encoding="utf-8")
     assert '"status": "PASS"' in text
-    assert '"version": "0.1.0"' in text
+    assert '"version": "0.2.0a1"' in text
 
 
 def test_desktop_packaging_files_present():

@@ -4,7 +4,7 @@ import os
 from PyInstaller.utils.hooks import collect_all, copy_metadata
 
 bundle = os.environ.get("VERICORPUS_BUNDLE", "lite").strip().lower()
-if bundle not in {"lite", "full"}:
+if bundle not in {"lite", "standard", "verified"}:
     raise SystemExit(f"Unsupported VERICORPUS_BUNDLE={bundle}")
 
 pathex = [os.path.abspath("src"), os.path.abspath("packaging")]
@@ -26,7 +26,7 @@ try:
 except Exception:
     pass
 
-if bundle == "full":
+if bundle in {"standard", "verified"}:
     for pkg, dist in [
         ("paddle", "paddlepaddle"),
         ("paddleocr", "paddleocr"),

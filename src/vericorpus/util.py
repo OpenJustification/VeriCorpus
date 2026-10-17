@@ -25,13 +25,50 @@ def stable_id(*parts: str, n: int = 20) -> str:
     return hashlib.sha256("\x1f".join(parts).encode("utf-8", errors="replace")).hexdigest()[:n]
 
 
+def _repair_spacing_diacritics(text: str) -> str:
+    # Some born-digital scientific PDFs expose a spacing acute/grave before the
+    # vowel it belongs to (e.g. Gonz´alez instead of González). Repair only the
+    # unambiguous vowel cases; never invent letters.
+    replacements = {
+        "´": "\u0301",
+        "`": "\u0300",
+        "ˆ": "\u0302",
+        "˜": "\u0303",
+        "¨": "\u0308",
+    }
+    vowels = "AEIOUYaeiouy"
+    for spacing, combining in replacements.items():
+        text = re.sub(
+            re.escape(spacing) + f"([{vowels}])",
+            lambda m: unicodedata.normalize("NFC", m.group(1) + combining),
+            text,
+        )
+    return text
+
+
 def normalize_text(text: str) -> str:
-    text = unicodedata.normalize("NFKC", text or "")
-    text = text.replace("\u00ad", "")
-    text = re.sub(r"-\n(?=[a-z])", "", text)
+    text = text or ""
+    # Join soft-hyphen line wraps before removing the soft hyphen itself.
+    text = re.sub(r"\u00ad\s*(?:\r?\n)?\s*", "", text)
+    text = _repair_spacing_diacritics(text)
+    text = unicodedata.normalize("NFC", text)
+    text = text.replace("◦C", "°C").replace("ºC", "°C")
+    text = re.sub(r"-\s*\n\s*(?=[a-z])", "-", text)
+    # Join common PDF word wraps that were split only by a newline after the
+    # soft-hyphen was stripped. Keep real paragraph boundaries intact.
+    text = re.sub(r"(?<=[a-z])\n(?=[a-z]{2,}\b)", " ", text)
     text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r" *\n *", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+def normalize_block_text(text: str) -> str:
+    text = normalize_text(text)
+    # A layout block is already a semantic region, so line wraps inside it can
+    # normally be collapsed to spaces while keeping explicit blank lines.
+    paras = [re.sub(r"\s*\n\s*", " ", p).strip() for p in re.split(r"\n\s*\n", text)]
+    return "\n\n".join(p for p in paras if p)
 
 
 def comparison_text(text: str) -> str:
@@ -68,6 +105,18 @@ def text_quality(text: str) -> float:
     return max(0.0, min(score, 1.0))
 
 
+def unicode_quality(text: str) -> float:
+    if not text:
+        return 0.0
+    n = max(len(text), 1)
+    bad = text.count("\ufffd")
+    bad += sum(1 for c in text if unicodedata.category(c) in {"Cc", "Cs"} and c not in "\n\t\r")
+    bad += len(re.findall(r"[´`ˆ˜¨](?=[AEIOUYaeiouy])", text))
+    # Isolated combining mark after whitespace/punctuation is suspicious.
+    bad += len(re.findall(r"(?:^|[\s\W])[\u0300-\u036f]", text))
+    return max(0.0, min(1.0, 1.0 - 12.0 * bad / n))
+
+
 _HIGH_RISK_PATTERNS = [
     r"\b\d+(?:\.\d+)?\b",
     r"\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\s*(?:%|mg|g|kg|µg|ug|ng|mL|ml|L|M|mM|µM|uM|nM|mg/kg|mg/mL|µg/mL)\b",
@@ -76,7 +125,7 @@ _HIGH_RISK_PATTERNS = [
     r"\bp\s*[<=>]\s*0?\.\d+\b",
     r"\b[ACGTUN]{12,}\b",
     r"\b[A-Z]{15,}\b",
-    r"(?:[A-Za-z0-9]\s*[=+\-*/^]\s*){2,}[A-Za-z0-9]",
+    r"(?:[A-Za-z0-9]\s*[=+\-*/^↔≤≥±×÷]\s*){2,}[A-Za-z0-9]",
 ]
 
 
@@ -90,10 +139,12 @@ def content_type(text: str, label: str | None = None) -> str:
         return "table"
     if any(k in label_l for k in ["formula", "equation", "math"]):
         return "equation"
+    if "figure" in label_l or label_l == "image":
+        return "figure"
     if "code" in label_l:
         return "code"
     t = text or ""
-    if re.search(r"(?:[A-Za-z0-9]\s*[=+\-*/^]\s*){2,}[A-Za-z0-9]", t):
+    if re.search(r"(?:[A-Za-z0-9]\s*[=+\-*/^↔≤≥±×÷]\s*){2,}[A-Za-z0-9]", t):
         return "equation"
     if re.search(r"\b(?:doi:|GSE|SRR|SRX|PRJNA|PMID|ISBN|NCT)\w*", t, re.I):
         return "identifier"

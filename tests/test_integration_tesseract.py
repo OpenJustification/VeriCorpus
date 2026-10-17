@@ -80,14 +80,14 @@ def test_manifest_and_training_records_are_schema_stamped(tmp_path):
             use_olmocr=False,
         ),
     )
-    assert manifest["vericorpus_schema"] == "1.0"
+    assert manifest["vericorpus_schema"] == "3.0"
     assert manifest["generator"] == "vericorpus"
-    assert manifest["generator_version"] == "0.1.0"
+    assert manifest["generator_version"] == "0.2.0a1"
 
     rows = [json.loads(line) for line in (out / "training.jsonl").read_text(encoding="utf-8").splitlines()]
     assert rows
-    assert all(row["vericorpus_schema"] == "1.0" for row in rows)
-    assert all(row["generator_version"] == "0.1.0" for row in rows)
+    assert all(row["vericorpus_schema"] == "3.0" for row in rows)
+    assert all(row["generator_version"] == "0.2.0a1" for row in rows)
 
 
 def test_lite_profile_accepts_clean_native_pdf(tmp_path):
@@ -112,4 +112,4 @@ def test_lite_profile_accepts_clean_native_pdf(tmp_path):
     manifest = prepare(src, out, settings_for_profile("lite"))
     rows = [json.loads(line) for line in (out / "training.jsonl").read_text(encoding="utf-8").splitlines() if line]
     assert rows
-    assert rows[0]["provenance"]["decision_reason"] == "high_quality_native_pdf_text_layer"
+    assert rows[0]["provenance"]["decision_reason"] == "training_readiness_pass"

@@ -24,7 +24,11 @@ jobs:
             archive: zip
           - os: windows-latest
             platform: Windows-x64
-            flavor: full
+            flavor: standard
+            archive: zip
+          - os: windows-latest
+            platform: Windows-x64
+            flavor: verified
             archive: zip
           - os: ubuntu-24.04
             platform: Linux-x86_64
@@ -32,14 +36,18 @@ jobs:
             archive: tar
           - os: ubuntu-24.04
             platform: Linux-x86_64
-            flavor: full
+            flavor: standard
+            archive: tar
+          - os: ubuntu-24.04
+            platform: Linux-x86_64
+            flavor: verified
             archive: tar
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12.10"
           cache: pip
@@ -57,7 +65,7 @@ jobs:
           python --version
           python -m pip --version
           python -m pip install --upgrade pip
-          if [ "${{ matrix.flavor }}" = "full" ]; then
+          if [ "${{ matrix.flavor }}" != "lite" ]; then
             echo "Installing FULL desktop dependency lock"
             python -m pip install --prefer-binary -r packaging/requirements-bundle-full.txt --report pip-install-report.json
           else
@@ -84,9 +92,14 @@ jobs:
           set -euxo pipefail
           python scripts/build_desktop.py --flavor "${{ matrix.flavor }}"
 
+      - name: Add Tesseract for Verified Windows
+        if: runner.os == 'Windows' && matrix.flavor == 'verified'
+        shell: pwsh
+        run: .\packaging\stage_tesseract_windows.ps1
+
       - name: Upload PyInstaller diagnostics
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: pyinstaller-diagnostics-${{ matrix.platform }}-${{ matrix.flavor }}
           path: |
@@ -104,7 +117,7 @@ jobs:
           import json, os, platform, subprocess, sys
           from pathlib import Path
           info = {
-              "vericorpus": "0.1.0",
+              "vericorpus": "0.2.0a1",
               "git_sha": os.environ.get("GITHUB_SHA", "unknown"),
               "platform": platform.platform(),
               "machine": platform.machine(),
@@ -153,7 +166,7 @@ jobs:
           }
 
           $r = Get-Content desktop-selftest.json | ConvertFrom-Json
-          if ($r.status -ne "PASS" -or $r.version -ne "0.1.0") {
+          if ($r.status -ne "PASS" -or $r.version -ne "0.2.0a1") {
             throw "Unexpected packaged self-test result: $($r | ConvertTo-Json -Compress)"
           }
 
@@ -180,7 +193,7 @@ jobs:
           python - <<'PY'
           import json
           d=json.load(open('desktop-selftest.json', encoding='utf-8'))
-          assert d['status']=='PASS' and d['version']=='0.1.0', d
+          assert d['status']=='PASS' and d['version']=='0.2.0a1', d
           PY
 
       - name: ClamAV scan
@@ -198,7 +211,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $name = "VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}"
+          $name = "VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}"
           Compress-Archive -Path .\dist\VeriCorpus\* -DestinationPath "$name.zip" -CompressionLevel Optimal
           $hash = (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLower()
           "$hash  $name.zip" | Out-File -Encoding ascii "$name.zip.sha256"
@@ -206,17 +219,17 @@ jobs:
       - name: Create Linux archive and checksum
         if: runner.os == 'Linux'
         run: |
-          name="VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}"
+          name="VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}"
           tar -C dist -czf "$name.tar.gz" VeriCorpus
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v4
         with:
-          name: VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}
+          name: VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}
           path: |
-            VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.zip
-            VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.zip.sha256
-            VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz
-            VeriCorpus-0.1.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz.sha256
+            VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}.zip
+            VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}.zip.sha256
+            VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz
+            VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz.sha256
             pip-install-report.json
           if-no-files-found: ignore

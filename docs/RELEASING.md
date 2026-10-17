@@ -1,6 +1,6 @@
 # Release process
 
-VeriCorpus uses semantic version tags such as `v0.1.0`.
+VeriCorpus uses version tags matching the Python package release, such as `v0.2.0a1` for this alpha.
 
 ## Pre-release checklist
 
@@ -26,11 +26,11 @@ python -m twine check dist/*
 8. Create and push the tag:
 
 ```bash
-git tag -a v0.1.0 -m "VeriCorpus 0.1.0"
-git push origin v0.1.0
+git tag -a v0.2.0a1 -m "VeriCorpus 0.2.0-alpha.1"
+git push origin v0.2.0a1
 ```
 
-The GitHub release workflow builds a wheel/source distribution plus Windows x64 and Linux x86_64 Lite/Full desktop bundles, executes packaged self-tests, runs antivirus release gates, generates SHA-256 checksums and GitHub provenance attestations, and creates a GitHub **pre-release** using `RELEASE_NOTES_v0.1.0.md` while VeriCorpus remains alpha. Remove the `--prerelease` flag only when the project is ready for stable releases.
+The GitHub release workflow builds a wheel/source distribution plus Windows x64 and Linux x86_64 Lite/Standard/Verified desktop bundles, executes packaged self-tests, runs antivirus release gates, generates SHA-256 checksums and GitHub provenance attestations, and creates a GitHub **pre-release** using `RELEASE_NOTES_v0.2.0-alpha.md` while VeriCorpus remains alpha. Remove the `--prerelease` flag only when the project is ready for stable releases.
 
 ## PyPI
 

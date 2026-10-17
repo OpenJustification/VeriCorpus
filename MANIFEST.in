@@ -20,3 +20,15 @@ include AI_POLICY.md
 recursive-include rfcs *.md
 recursive-include models *.json
 recursive-include packaging *.py *.txt *.md *.spec
+
+include RELEASE_NOTES_v0.2.0-alpha.md
+
+include UPGRADE_FROM_0.1.md
+
+include RELEASE_NOTES_v0.2.0-alpha.md
+
+include QUICKSTART.md
+include START_WINDOWS.cmd
+include START_LINUX.sh
+
+include TEST_REPORT_v0.2.0-alpha.md

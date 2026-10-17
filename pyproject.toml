@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vericorpus"
 dynamic = ["version"]
-description = "Reproducible, evidence-first, open-model document preparation for auditable LLM training data"
+description = "Autonomous, reproducible, evidence-first document preparation for auditable LLM training data"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
@@ -38,7 +38,7 @@ classifiers = [
 dependencies = [
   "PyMuPDF>=1.24",
   "Pillow>=10",
-  "pytesseract>=0.3.13",
+  "pytesseract>=0.2.13",
   "pydantic>=2",
   "typer>=0.12",
   "rich>=13",
@@ -70,6 +70,11 @@ all = [
   "pandas>=2,<4",
   "pyarrow>=15,<25",
 ]
+
+[project.urls]
+Homepage = "https://github.com/OpenJustification/VeriCorpus"
+Repository = "https://github.com/OpenJustification/VeriCorpus"
+Issues = "https://github.com/OpenJustification/VeriCorpus/issues"
 
 [project.scripts]
 vericorpus = "vericorpus.cli:app"

@@ -2,9 +2,11 @@ cff-version: 1.2.0
 message: "If you use VeriCorpus in academic work, please cite the software release."
 title: "VeriCorpus"
 type: software
-version: 0.1.0
+version: 0.2.0a1
 date-released: 2026-10-17
 authors:
   - name: "VeriCorpus contributors"
 license: AGPL-3.0-or-later
-abstract: "Reproducible, evidence-first, open-model PDF preparation for auditable LLM training data."
+abstract: "Autonomous, evidence-first document structure reconstruction and preparation of PDFs for auditable LLM training data."
+repository-code: "https://github.com/OpenJustification/VeriCorpus"
+url: "https://github.com/OpenJustification/VeriCorpus"

@@ -11,7 +11,7 @@ From this project directory:
 ```bash
 git init
 git add .
-git commit -s -m "Initial VeriCorpus 0.1.0 release"
+git commit -s -m "VeriCorpus 0.2.0-alpha training-readiness architecture"
 git branch -M main
 git remote add origin <YOUR-GITHUB-REPOSITORY-URL>
 git push -u origin main
@@ -46,16 +46,19 @@ For a single-maintainer early alpha, you may start less strictly and tighten thi
 After the initial push passes CI:
 
 ```bash
-git tag -a v0.1.0 -m "VeriCorpus 0.1.0"
-git push origin v0.1.0
+git tag -a v0.2.0a1 -m "VeriCorpus 0.2.0-alpha.1"
+git push origin v0.2.0a1
 ```
 
-The release workflow will run tests, build the wheel and source distribution, create SHA-256 checksums, build/smoke-test Windows and Linux desktop bundles (Lite and Full), scan them, and attach the artifacts to a GitHub **pre-release** while VeriCorpus remains alpha.
+The tagged release workflow builds/tests Windows and Linux desktop bundles (Lite, Standard, Verified) and creates SHA-256 checksums, scan them, and attach the artifacts to a GitHub **pre-release** while VeriCorpus remains alpha.
 
-## 5. Repository URL placeholders
+## 5. Repository URL
 
-Because the final GitHub owner/repository URL was not known when this package was prepared, add the final project URLs to `pyproject.toml` and `CITATION.cff` after the repository exists. This is optional for GitHub operation but recommended before publishing to PyPI or citing the project.
+The package metadata points to `https://github.com/OpenJustification/VeriCorpus`. Update those URLs only if the canonical repository changes.
 
 ## License verification
 
 Before public publication, GitHub should detect the repository license as AGPL-3.0. The project metadata intentionally uses the SPDX expression `AGPL-3.0-or-later`.
+
+
+For a normal GitHub Desktop push to `main`/`master`, the primary workflow is **Windows EXE - Lite Standard Verified** (`.github/workflows/windows-exe.yml`). It builds three Windows artifacts without a tag. See `BUILD_ALL_THREE_WINDOWS.md`.

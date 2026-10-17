@@ -1,22 +1,17 @@
-# Desktop packaging
+# Desktop packaging — VeriCorpus 0.2.0 (experimental alpha)
 
-VeriCorpus publishes **onedir** desktop bundles rather than self-extracting one-file executables.
-This reduces antivirus heuristics and makes every bundled file inspectable.
+Build three PyInstaller onedir bundles with `python scripts/build_desktop.py --flavor lite`,
+`--flavor standard`, or `--flavor verified`. The executable always has the name
+`VeriCorpus.exe` on Windows; ZIP artifacts have distinct profile names.
 
-Release artifacts:
+- **Lite:** native digital PDF extraction and Document Structure Engine.
+- **Standard:** Lite plus the PaddleOCR-VL and Docling Python packages. Model weights are not bundled.
+- **Verified:** Standard plus separately packaged Tesseract (Windows Actions builds only).
+  GLM-OCR and olmOCR are optional external local services, not bundled.
 
-- `VeriCorpus-0.1.0-Windows-x64-Lite.zip`
-- `VeriCorpus-0.1.0-Windows-x64-Full.zip`
-- `VeriCorpus-0.1.0-Linux-x86_64-Lite.tar.gz`
-- `VeriCorpus-0.1.0-Linux-x86_64-Full.tar.gz`
+The authoritative workflow is `.github/workflows/windows-exe.yml` (three automatic Windows
+jobs). Advanced model startup may need additional downloads and runtime setup.
+The existing `packaging/vericorpus.spec` is a developer fallback; the workflow uses
+`scripts/build_desktop.py` with PyInstaller command-line options.
 
-Each archive contains a graphical `VeriCorpus` application. Windows uses `VeriCorpus.exe`.
-Linux uses `VeriCorpus`.
-
-The **Lite** build contains the deterministic born-digital PDF path and is the smallest release.
-The **Full** build additionally bundles the Python packages required by the Standard profile
-(PaddleOCR-VL and Docling). Model weights are not redistributed; users may allow a one-time
-upstream model download, after which processing can remain offline.
-
-Qwen and Nemotron remain catalogued/staged model packs. They are not allowed to affect output
-until their constrained local adjudicator implementations pass the release integration suite.
+Tesseract and downloaded model assets keep their upstream licenses. The Windows Verified workflow refuses to package a Tesseract installation if it cannot find license notice files.

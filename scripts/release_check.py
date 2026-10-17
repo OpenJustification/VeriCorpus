@@ -26,13 +26,13 @@ def main() -> int:
         errors.append(f"CHANGELOG.md has no section for {__version__}")
 
     required = [
-        "README.md", "LICENSE", "NOTICE", "SECURITY.md", "CONTRIBUTING.md", "GOVERNANCE.md",
+        "README.md", "UPGRADE_FROM_0.1.md", "LICENSE", "NOTICE", "SECURITY.md", "CONTRIBUTING.md", "GOVERNANCE.md",
         "DCO.md", "AI_POLICY.md", "THIRD_PARTY_LICENSES.md", "docs/SCHEMA.md", "docs/PLUGINS.md",
         "docs/RELEASING.md", "docs/REPRODUCIBILITY.md", "docs/LEGAL_AND_MODEL_POLICY.md",
-        "docs/TOOL_SELECTION.md", "docs/DESKTOP_RELEASES.md", "models/benchmark-snapshot.json",
-        "RELEASE_NOTES_v0.1.0.md", "models/reference-open.json", "models/model-lock.example.json",
+        "docs/TOOL_SELECTION.md", "docs/DESKTOP_RELEASES.md", "docs/OBJECT_IDENTIFICATION.md", "models/benchmark-snapshot.json",
+        "RELEASE_NOTES_v0.2.0-alpha.md", "models/reference-open.json", "models/model-lock.example.json",
         ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/dco.yml",
-        ".github/workflows/desktop-build.yml", "packaging/vericorpus.spec", "packaging/desktop_entry.py",
+        ".github/workflows/desktop-build.yml", ".github/workflows/windows-exe.yml", "packaging/stage_tesseract_windows.ps1", "packaging/vericorpus.spec", "packaging/desktop_entry.py",
         "packaging/requirements-bundle-lite.txt", "packaging/requirements-bundle-full.txt",
         "src/vericorpus/desktop.py",
     ]

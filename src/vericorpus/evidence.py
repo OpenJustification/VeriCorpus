@@ -37,11 +37,19 @@ def choose_anchor(candidates: list[Candidate]) -> Candidate:
 
 
 def page_agreement(candidates: list[Candidate]) -> float:
+    """Agreement across independent evidence families only.
+
+    Multiple wrappers from the same parser/model family are not independent
+    witnesses and must not inflate page confidence.
+    """
     c=[x for x in candidates if x.text.strip()]
-    if len(c)<2: return 0.0
+    if len(c)<2:
+        return 0.0
     vals=[]
     for i in range(len(c)):
         for j in range(i+1,len(c)):
+            if evidence_family(c[i].engine,candidates)==evidence_family(c[j].engine,candidates):
+                continue
             vals.append(similarity(c[i].text,c[j].text))
     return sum(vals)/len(vals) if vals else 0.0
 

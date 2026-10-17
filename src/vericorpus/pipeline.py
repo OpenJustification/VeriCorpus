@@ -11,7 +11,10 @@ import fitz
 
 from . import __schema_version__, __version__
 from .config import Settings
-from .dedupe import exact_dedupe, near_dedupe
+from .dedupe import dedupe_with_report
+from .corpus import stable_record_id, create_training_exports, validate_run
+from .epub import epub_structures, epub_candidate
+from .dashboard import write_review_dashboard
 from .evidence import (
     detect_disagreements,
     drop_unresolved_sentences,
@@ -19,9 +22,10 @@ from .evidence import (
     reconstruct_anchor,
     resolve_disagreement,
 )
-from .extractors import native_candidate, tesseract_candidate
+from .extractors import tesseract_candidate
+from .layout import analyze_page, native_layout_candidate, structure_to_text
 from .model_registry import load_model_lock, load_registry, validate_registry
-from .models import Candidate, PageRecord
+from .models import Candidate, PageRecord, PageStructure
 from .optional_adapters import (
     availability,
     docling_candidate,
@@ -30,7 +34,9 @@ from .optional_adapters import (
     paddle_candidate,
 )
 from .plugins import discover_extractor_plugins
+from .quality import quality_vector, training_readiness
 from .repro import canonical_json_hash, model_cache_fingerprints, runtime_fingerprint, verify_cache_fingerprints
+from .routing import route_page
 from .util import sha256_file, text_quality
 
 
@@ -51,8 +57,6 @@ def _set_offline(settings: Settings) -> None:
         for key in keys:
             os.environ[key] = "1"
     else:
-        # Desktop sessions are long-lived: a previous offline run must not permanently
-        # block an explicitly online first-run model download in the same process.
         for key in keys:
             os.environ.pop(key, None)
 
@@ -60,17 +64,21 @@ def _set_offline(settings: Settings) -> None:
 def _collect_candidates(
     page: fitz.Page,
     page_no: int,
+    structure: PageStructure,
+    route: dict,
     settings: Settings,
     avail: dict[str, bool],
     plugins: dict | None = None,
 ) -> list[Candidate]:
-    out = [native_candidate(page, page_no)]
-    if settings.use_tesseract:
+    out = [native_layout_candidate(structure)]
+    requested = set(route.get("requested_engines", []))
+
+    if "tesseract" in requested:
         try:
             out.append(tesseract_candidate(page, page_no, dpi=settings.render_dpi))
         except Exception as exc:
             out.append(_error_candidate("tesseract", exc))
-    if settings.use_paddleocr:
+    if "paddleocr_vl_1_6" in requested:
         if avail.get("paddleocr_vl_1_6"):
             try:
                 out.append(paddle_candidate(page, page_no, dpi=settings.render_dpi))
@@ -78,7 +86,7 @@ def _collect_candidates(
                 out.append(_error_candidate("paddleocr_vl_1_6", exc))
         else:
             out.append(_error_candidate("paddleocr_vl_1_6", "not installed or model unavailable"))
-    if settings.use_docling:
+    if "docling" in requested:
         if avail.get("docling"):
             try:
                 out.append(docling_candidate(page, page_no))
@@ -86,7 +94,7 @@ def _collect_candidates(
                 out.append(_error_candidate("docling", exc))
         else:
             out.append(_error_candidate("docling", "not installed"))
-    if settings.use_glmocr:
+    if "glmocr" in requested:
         if avail.get("glmocr"):
             try:
                 out.append(glmocr_candidate(page, page_no, dpi=settings.render_dpi))
@@ -94,7 +102,7 @@ def _collect_candidates(
                 out.append(_error_candidate("glmocr", exc))
         else:
             out.append(_error_candidate("glmocr", "not installed/self-hosted backend unavailable"))
-    if settings.use_olmocr:
+    if "olmocr2" in requested:
         if avail.get("olmocr"):
             try:
                 out.append(olmocr_candidate(page, page_no))
@@ -114,31 +122,38 @@ def _collect_candidates(
     return out
 
 
-def _special_blocks(document_id: str, source_file: str, page_no: int, candidates: list[Candidate]):
+def _structure_rows(document_id: str, source_file: str, structure: PageStructure) -> list[dict]:
     rows = []
-    seen = set()
-    for c in candidates:
-        for s in c.spans:
-            if s.content_type not in {"table", "equation", "code", "identifier"}:
-                continue
-            key = (s.content_type, s.text.strip().lower(), page_no)
-            if not s.text.strip() or key in seen:
-                continue
-            seen.add(key)
-            rows.append(
-                {
-                    "document_id": document_id,
-                    "source_file": source_file,
-                    "page_number": page_no,
-                    "content_type": s.content_type,
-                    "text": s.text,
-                    "engine": s.engine,
-                    "confidence": s.confidence,
-                    "bbox": s.bbox.model_dump() if s.bbox else None,
-                    "status": "evidence_only",
-                    "note": "High-risk structured blocks require independent source evidence; VeriCorpus does not generatively repair them.",
-                }
-            )
+    for o in structure.objects:
+        if o.metadata.get("suppressed"):
+            continue
+        if o.object_type not in {
+            "table",
+            "equation",
+            "figure",
+            "figure_caption",
+            "code",
+            "algorithm",
+            "identifier",
+        }:
+            continue
+        rows.append(
+            {
+                "document_id": document_id,
+                "source_file": source_file,
+                "page_number": structure.page_number,
+                "object_id": o.object_id,
+                "content_type": o.object_type,
+                "text": o.text,
+                "engine": o.source,
+                "confidence": o.confidence,
+                "bbox": o.bbox.model_dump(),
+                "reading_order": o.reading_order,
+                "column_index": o.column_index,
+                "status": "source_derived_object",
+                "child_ids": o.child_ids,
+            }
+        )
     return rows
 
 
@@ -158,6 +173,47 @@ def _write_jsonl(path: Path, rows):
             stamped.setdefault("generator", "vericorpus")
             stamped.setdefault("generator_version", __version__)
             f.write(json.dumps(stamped, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def _write_pretty_json(path: Path, rows: list[dict]) -> None:
+    stamped = []
+    for row in rows:
+        x = dict(row)
+        x.setdefault("vericorpus_schema", __schema_version__)
+        x.setdefault("generator", "vericorpus")
+        x.setdefault("generator_version", __version__)
+        stamped.append(x)
+    path.write_text(json.dumps(stamped, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _write_review(path: Path, rows: list[dict]) -> None:
+    chunks = [f"# VeriCorpus training review\n\nGenerator: VeriCorpus {__version__}\n"]
+    for r in rows:
+        q = r.get("quality_dimensions", {})
+        ready = r.get("training_readiness", {})
+        layout = r.get("layout", {})
+        chunks.append(
+            "\n".join(
+                [
+                    f"## {r.get('source_file')} — page {r.get('page_number')}",
+                    "",
+                    f"- Status: **{ready.get('status', 'unknown')}**",
+                    f"- Overall quality: **{q.get('overall', r.get('quality', 0)):.3f}**",
+                    f"- Verification: `{ready.get('verification_grade', 'unknown')}`",
+                    f"- Layout: `{layout.get('layout_type', 'unknown')}`; columns: {layout.get('column_count', '?')}",
+                    f"- Reading-order confidence: {q.get('reading_order', 0):.3f}",
+                    f"- Table confidence: {q.get('tables', 1):.3f}",
+                    f"- Equation confidence: {q.get('equations', 1):.3f}",
+                    f"- Numeric fidelity: {q.get('numeric_fidelity', 1):.3f}",
+                    "",
+                    "### Training text",
+                    "",
+                    r.get("text", ""),
+                    "",
+                ]
+            )
+        )
+    path.write_text("\n".join(chunks).rstrip() + "\n", encoding="utf-8")
 
 
 def prepare(input_path: Path, out_dir: Path, settings: Settings):
@@ -183,113 +239,169 @@ def prepare(input_path: Path, out_dir: Path, settings: Settings):
     runtime = runtime_fingerprint(settings.seed, model_lock)
 
     if input_path.is_dir():
-        files = [p for p in sorted(input_path.rglob("*")) if p.suffix.lower() == ".pdf"]
-    elif input_path.suffix.lower() == ".pdf":
+        files = [p for p in sorted(input_path.rglob("*")) if p.suffix.lower() in {".pdf", ".epub"}]
+    elif input_path.suffix.lower() in {".pdf", ".epub"}:
         files = [input_path]
     else:
-        raise ValueError("VeriCorpus 0.1 currently accepts PDF files or folders containing PDFs.")
+        raise ValueError("VeriCorpus accepts PDF/EPUB files or folders containing them.")
     if not files:
-        raise ValueError("No PDF files were found in the requested input.")
+        raise ValueError("No PDF/EPUB files were found in the requested input.")
 
     avail = availability()
     plugins = discover_extractor_plugins()
-    audits = []
-    ledger_rows = []
-    accepted = []
-    rejected = []
-    structured = []
+    audits: list[dict] = []
+    ledger_rows: list[dict] = []
+    accepted: list[dict] = []
+    rejected: list[dict] = []
+    partial: list[dict] = []
+    unresolved_rows: list[dict] = []
+    structured: list[dict] = []
+    structures: list[dict] = []
+    routing_rows: list[dict] = []
     inputs = []
 
     for pdf_path in files:
         source_file = str(pdf_path.relative_to(input_path)) if input_path.is_dir() else pdf_path.name
         doc_hash = sha256_file(pdf_path)
         inputs.append({"source_file": source_file, "sha256": doc_hash, "bytes": pdf_path.stat().st_size})
-        doc = fitz.open(pdf_path)
-        try:
-            for page_idx in range(len(doc)):
-                page_no = page_idx + 1
-                page = doc[page_idx]
-                candidates = _collect_candidates(page, page_no, settings, avail, plugins)
+        def iter_source_units():
+            if pdf_path.suffix.lower() == ".epub":
+                for item in epub_structures(pdf_path):
+                    yield None, item
+            else:
+                with fitz.open(pdf_path) as source_doc:
+                    for page_idx in range(len(source_doc)):
+                        page = source_doc[page_idx]
+                        yield page, analyze_page(page, page_idx + 1)
+
+        for page, structure in iter_source_units():
+                page_no = structure.page_number
+                route = route_page(structure, settings, avail) if page is not None else {
+                    "profile": settings.profile, "requested_engines": ["epub_xhtml"], "complex": bool(structure.complexity_score > 0.38),
+                    "complexity_score": structure.complexity_score, "reasons": ["epub_dom_extraction_no_ocr"],
+                }
+                route_row = {"document_id": doc_hash, "source_file": source_file, "page_number": page_no, **route}
+                routing_rows.append(route_row)
+                structures.append({"document_id": doc_hash, "source_file": source_file, **structure.model_dump()})
+                structured.extend(_structure_rows(doc_hash, source_file, structure))
+
+                candidates = _collect_candidates(page, page_no, structure, route, settings, avail, plugins) if page is not None else [epub_candidate(structure)]
                 useful = [
                     c
                     for c in candidates
                     if c.text.strip() and not c.engine.endswith("_error") and c.confidence >= settings.min_engine_confidence
                 ]
-                structured.extend(_special_blocks(doc_hash, source_file, page_no, useful))
 
-                anchor, disagreements = detect_disagreements(useful, page_no, settings.disagreement_context_chars)
+                if useful:
+                    anchor, disagreements = detect_disagreements(useful, page_no, settings.disagreement_context_chars)
+                else:
+                    anchor = Candidate(engine="none", text="", confidence=0.0)
+                    disagreements = []
+
                 ledger = []
                 for d in disagreements:
-                    # Reference build settles text only from independent extraction evidence.
-                    # Local visual-judge plugins may be added later, but cannot author replacement text.
                     entry = resolve_disagreement(doc_hash, source_file, d, useful, [], 1.0)
                     ledger.append(entry)
                     ledger_rows.append(entry.model_dump())
+                    if entry.decision == "unresolved":
+                        unresolved_rows.append(
+                            {
+                                "document_id": doc_hash,
+                                "source_file": source_file,
+                                "page_number": page_no,
+                                "disagreement_id": d.disagreement_id,
+                                "content_type": d.content_type,
+                                "high_risk": d.high_risk,
+                                "bbox": d.bbox.model_dump() if d.bbox else None,
+                                "alternatives": d.alternatives,
+                                "reason": entry.reason,
+                            }
+                        )
 
                 agreement = page_agreement(useful)
-                if len(useful) < 2:
-                    # A clean born-digital PDF text layer is source evidence, not a
-                    # language-model reconstruction. Lite mode may therefore admit it
-                    # when the native extraction itself is strong. Scans/weak text
-                    # still require independent extraction evidence.
-                    native_only = (
-                        len(useful) == 1
-                        and useful[0].engine == "pymupdf_native"
-                        and useful[0].confidence >= max(0.95, settings.page_accept_quality)
-                        and len(useful[0].text.strip()) >= 40
-                    )
+                if not useful:
+                    reconstructed = structure_to_text(structure)
+                    clean = ""
+                    unresolved = 1
+                    high_unresolved = 1 if structure.diagnostics.get("high_risk_objects", 0) else 0
+                elif len(useful) == 1:
+                    # One source family can still be technically training-ready when
+                    # it is born-digital and the Document Structure Engine validates
+                    # object layout / reading order. The verification grade remains
+                    # source_plus_layout, never cross-family.
                     reconstructed = anchor.text
-                    if native_only:
-                        unresolved = 0
-                        high_unresolved = 0
-                        clean = anchor.text
-                        decision = "accepted"
-                        reason = "high_quality_native_pdf_text_layer"
-                    else:
-                        unresolved = max(1, len(disagreements))
-                        high_unresolved = max(1, sum(1 for d in disagreements if d.high_risk))
-                        clean = ""
-                        decision = "rejected"
-                        reason = "fewer_than_two_independent_extractions"
+                    clean = anchor.text
+                    unresolved = 0
+                    high_unresolved = 0
                 else:
                     reconstructed, unresolved, high_unresolved = reconstruct_anchor(anchor, disagreements, ledger)
                     clean = drop_unresolved_sentences(reconstructed)
-                    if not disagreements and agreement >= settings.span_agreement_threshold and anchor.confidence >= settings.page_accept_quality:
-                        decision = "accepted"
-                        reason = "page_level_independent_agreement"
-                    elif unresolved == 0 and clean.strip():
-                        decision = "accepted"
-                        reason = "all_localized_disagreements_resolved"
-                    else:
-                        frac = unresolved / max(len(disagreements), 1)
-                        if clean.strip() and frac <= settings.reject_page_if_unresolved_fraction_gt:
-                            decision = "partial"
-                            reason = "unresolved_sentences_removed"
-                        else:
-                            decision = "rejected"
-                            reason = "too_much_unresolved_content"
+
+                q = quality_vector(
+                    clean if clean else reconstructed,
+                    structure,
+                    useful,
+                    len(disagreements),
+                    unresolved,
+                    high_unresolved,
+                )
+                ready = training_readiness(
+                    q,
+                    structure,
+                    useful,
+                    unresolved,
+                    high_unresolved,
+                    settings.page_accept_quality,
+                )
+
+                if ready.status == "accepted" and clean.strip():
+                    decision = "accepted"
+                    reason = "training_readiness_pass"
+                elif ready.status == "partial" and clean.strip():
+                    decision = "partial"
+                    reason = "training_readiness_partial"
+                elif ready.status == "reprocess":
+                    decision = "reprocess"
+                    reason = "training_readiness_reprocess"
+                else:
+                    decision = "rejected"
+                    reason = "training_readiness_reject"
 
                 page_record = PageRecord(
                     document_id=doc_hash,
                     source_file=source_file,
                     page_number=page_no,
                     candidates=candidates,
+                    structure=structure,
+                    quality=q,
+                    readiness=ready,
+                    routing=route,
                     disagreements=disagreements,
                     ledger_entries=ledger,
-                    selected_text=clean if decision != "rejected" else reconstructed,
+                    selected_text=clean if clean else reconstructed,
                     agreement=agreement,
-                    selected_quality=text_quality(clean if clean else reconstructed),
+                    selected_quality=q.overall,
                     unresolved_spans=unresolved,
                     decision=decision,
                     decision_reason=reason,
                 )
                 audits.append(page_record.model_dump())
+
                 rec = {
                     "document_id": doc_hash,
                     "source_file": source_file,
+                    "source_format": pdf_path.suffix.lower().lstrip("."),
                     "page_number": page_no,
-                    "text": clean,
-                    "quality": text_quality(clean),
+                    "text": clean if clean else reconstructed,
+                    "quality": q.overall,
+                    "quality_dimensions": q.model_dump(),
+                    "training_readiness": ready.model_dump(),
+                    "layout": {
+                        "layout_type": structure.layout_type,
+                        "column_count": structure.column_count,
+                        "complexity_score": structure.complexity_score,
+                        "complexity_reasons": structure.complexity_reasons,
+                    },
                     "provenance": {
                         "decision": decision,
                         "decision_reason": reason,
@@ -297,27 +409,40 @@ def prepare(input_path: Path, out_dir: Path, settings: Settings):
                         "unresolved_spans": unresolved,
                         "high_risk_unresolved_spans": high_unresolved,
                         "engines": [c.engine for c in useful],
+                        "evidence_families": sorted({c.metadata.get("evidence_family", c.engine) for c in useful}),
                         "ledger_ids": [e.ledger_id for e in ledger],
+                        "route": route,
                     },
                 }
-                if decision in {"accepted", "partial"} and clean.strip():
+                if rec["text"].strip():
+                    rec["record_id"] = stable_record_id(rec)
+                if decision == "accepted" and rec["text"].strip():
                     accepted.append(rec)
+                elif decision == "partial" and rec["text"].strip():
+                    partial.append(rec)
                 else:
-                    rec["text"] = reconstructed
                     rejected.append(rec)
-        finally:
-            doc.close()
 
     before = len(accepted)
-    accepted = exact_dedupe(accepted)
-    accepted = near_dedupe(accepted, threshold=0.95)
+    accepted, duplicate_rows = dedupe_with_report(accepted, threshold=0.95)
     after = len(accepted)
+    corpus_report = create_training_exports(out_dir, accepted, audits, structures, duplicate_rows, rejected, partial)
 
+    write_review_dashboard(out_dir / "review_dashboard.html", audits, structured, __version__)
     _write_jsonl(out_dir / "audit.jsonl", audits)
     _write_jsonl(out_dir / "evidence_ledger.jsonl", ledger_rows)
     _write_jsonl(out_dir / "training.jsonl", accepted)
     _write_jsonl(out_dir / "rejected.jsonl", rejected)
+    _write_jsonl(out_dir / "review_queue.jsonl", partial)
+    _write_jsonl(out_dir / "duplicates.jsonl", duplicate_rows)
+    _write_jsonl(out_dir / "unresolved.jsonl", unresolved_rows)
     _write_jsonl(out_dir / "structured_blocks.jsonl", structured)
+    _write_jsonl(out_dir / "document_structure.jsonl", structures)
+    _write_jsonl(out_dir / "routing.jsonl", routing_rows)
+    if settings.write_pretty_json:
+        _write_pretty_json(out_dir / "training.pretty.json", accepted)
+    if settings.write_review_markdown:
+        _write_review(out_dir / "training_review.md", accepted)
     (out_dir / "engine_status.json").write_text(json.dumps(avail, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     settings_obj = _settings_dict(settings)
@@ -334,6 +459,7 @@ def prepare(input_path: Path, out_dir: Path, settings: Settings):
         reproducibility_grade = "cache-fingerprinted-unlocked"
     else:
         reproducibility_grade = "unlocked-model-assets"
+
     manifest = {
         "vericorpus_schema": __schema_version__,
         "generator": "vericorpus",
@@ -351,36 +477,73 @@ def prepare(input_path: Path, out_dir: Path, settings: Settings):
         "pages_total": len(audits),
         "pages_accepted_before_dedupe": before,
         "pages_accepted_after_dedupe": after,
-        "pages_rejected": len(rejected),
+        "pages_rejected_or_reprocess": len(rejected),
+        "pages_partial_held_for_review": len(partial),
+        "duplicates_excluded": len(duplicate_rows),
+        "corpus_report": corpus_report,
         "ledger_entries": len(ledger_rows),
+        "unresolved_items": len(unresolved_rows),
         "structured_blocks": len(structured),
         "engine_availability": avail,
         "extractor_plugins": sorted(plugins),
         "acceptance_rate": after / max(len(audits), 1),
+        "architecture": {
+            "document_structure_engine": True,
+            "object_identification": True,
+            "column_detection": "1/2/3-column plus mixed-layout heuristic",
+            "dynamic_routing": True,
+            "multidimensional_quality": True,
+            "human_readable_exports": True,
+        },
         "safety_contract": [
             "Reference build never invents replacement text.",
-            "High-risk disagreements require independent source-derived evidence.",
-            "Unresolved sentences are removed from training output or the page is rejected.",
+            "Layout is identified before page text is flattened.",
+            "High-risk disagreements require independent source-derived evidence when multiple families are available.",
+            "Unresolved high-risk content blocks training acceptance.",
             "All localized decisions are preserved in evidence_ledger.jsonl.",
             "Network access is disabled for official reference runs unless the user explicitly changes settings.",
         ],
         "limitations": [
+            "Object and quality confidence values are heuristic until calibrated on a human-verified layout benchmark.",
             "Exact GPU floating-point reproducibility can vary across hardware/runtime versions even with deterministic decoding.",
-            "Confidence values are heuristic until calibrated on a human-verified benchmark.",
+            "Complex image-only equations/tables may require a configured visual parser in Standard or Verified profiles.",
         ],
     }
     manifest_path = out_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
 
     output_files = [
+        "review_dashboard.html",
         "audit.jsonl",
         "evidence_ledger.jsonl",
         "training.jsonl",
         "rejected.jsonl",
+        "review_queue.jsonl",
+        "duplicates.jsonl",
+        "pretraining.jsonl",
+        "corpus_report.json",
+        "DATASET_CARD.md",
+        "splits/train.jsonl",
+        "splits/validation.jsonl",
+        "splits/test.jsonl",
+        "splits/document_assignments.jsonl",
+        "unresolved.jsonl",
         "structured_blocks.jsonl",
+        "document_structure.jsonl",
+        "routing.jsonl",
         "engine_status.json",
     ]
+    if settings.write_pretty_json:
+        output_files.append("training.pretty.json")
+    if settings.write_review_markdown:
+        output_files.append("training_review.md")
     outputs = {name: _sha256_path(out_dir / name) for name in output_files}
     outputs["manifest_pre_hash_sha256"] = _sha256_path(manifest_path)
     (out_dir / "SHA256SUMS.json").write_text(json.dumps(outputs, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    integrity = validate_run(out_dir)
+    (out_dir / "validation_report.json").write_text(
+        json.dumps(integrity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    if integrity["status"] != "PASS":
+        raise RuntimeError("Dataset integrity validation failed: " + "; ".join(integrity["errors"]))
     return manifest

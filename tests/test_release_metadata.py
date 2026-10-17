@@ -17,7 +17,7 @@ def test_release_files_exist() -> None:
         "CONTRIBUTING.md", "GOVERNANCE.md", "DCO.md", "AI_POLICY.md",
         "THIRD_PARTY_LICENSES.md", "docs/SCHEMA.md", "docs/PLUGINS.md",
         "docs/REPRODUCIBILITY.md", "docs/LEGAL_AND_MODEL_POLICY.md", "docs/TOOL_SELECTION.md",
-        "models/reference-open.json", "models/model-lock.example.json", "models/benchmark-snapshot.json", "RELEASE_NOTES_v0.1.0.md", "docs/DESKTOP_RELEASES.md",
+        "models/reference-open.json", "models/model-lock.example.json", "models/benchmark-snapshot.json", "RELEASE_NOTES_v0.2.0-alpha.md", "docs/DESKTOP_RELEASES.md",
         ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/dco.yml", ".github/workflows/desktop-build.yml",
         "packaging/vericorpus.spec", "src/vericorpus/desktop.py",
     ]:
@@ -70,8 +70,8 @@ def test_license_file_is_agpl_v3_text() -> None:
 
 
 def test_public_release_version_and_schema() -> None:
-    assert __version__ == "0.1.0"
-    assert __schema_version__ == "1.0"
+    assert __version__ == "0.2.0a1"
+    assert __schema_version__ == "3.0"
 
 
 def test_tracked_benchmark_leaders_are_not_active_or_downloadable() -> None:

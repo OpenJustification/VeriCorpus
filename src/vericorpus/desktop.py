@@ -19,6 +19,40 @@ from .optional_adapters import availability
 from .pipeline import prepare
 
 
+def supported_profiles(bundle: str) -> list[str]:
+    """Only expose modes compatible with a packaged bundle's Python dependencies."""
+    return {"lite": ["lite"], "standard": ["lite", "standard"],
+            "verified": ["lite", "standard", "verified"]}.get(bundle, ["lite"])
+
+
+def _bundle_profile() -> str:
+    if getattr(sys, "frozen", False):
+        marker = Path(sys.executable).resolve().parent / "BUNDLE_PROFILE.json"
+        try:
+            name = json.loads(marker.read_text(encoding="utf-8")).get("bundle_profile", "lite")
+            return name if name in {"lite", "standard", "verified"} else "lite"
+        except (OSError, ValueError, TypeError):
+            return "lite"
+    # Developers can exercise each GUI mode when launched from Python source.
+    return os.environ.get("VERICORPUS_BUNDLE_PROFILE", "verified").lower()
+
+
+def _prepare_bundle_runtime() -> None:
+    """Activate a redistributable, bundled Windows Tesseract when one is present."""
+    if getattr(sys, "frozen", False) and sys.platform.startswith("win"):
+        root = Path(sys.executable).resolve().parent
+        tesseract_dir = root / "Tesseract-OCR"
+        if (tesseract_dir / "tesseract.exe").is_file():
+            os.environ["PATH"] = str(tesseract_dir) + os.pathsep + os.environ.get("PATH", "")
+            # Tesseract looks for data files inside its adjacent tessdata directory.
+            os.environ.setdefault("TESSDATA_PREFIX", str(tesseract_dir / "tessdata"))
+
+
+def _bundle_info() -> dict:
+    return {"version": __version__, "bundle_profile": _bundle_profile(),
+            "supported_profiles": supported_profiles(_bundle_profile()), "engines": availability()}
+
+
 def _default_home() -> Path:
     env = os.environ.get("VERICORPUS_HOME")
     if env:
@@ -118,6 +152,7 @@ def _run_gui() -> int:
         print(f"Tk GUI is unavailable: {exc}", file=sys.stderr)
         return 2
 
+    _prepare_bundle_runtime()
     home = _default_home()
     _configure_local_paths(home)
     outputs_home = home / "outputs"
@@ -131,7 +166,7 @@ def _run_gui() -> int:
             self.minsize(760, 600)
             self.input_path = tk.StringVar()
             self.output_path = tk.StringVar(value=str(outputs_home))
-            self.profile = tk.StringVar(value="lite")
+            self.profile = tk.StringVar(value=_bundle_profile())
             self.allow_network = tk.BooleanVar(value=False)
             self.dpi = tk.IntVar(value=300)
             self.status_text = tk.StringVar(value="Ready")
@@ -162,7 +197,7 @@ def _run_gui() -> int:
             row = ttk.Frame(file_box)
             row.pack(fill="x")
             ttk.Entry(row, textvariable=self.input_path).pack(side="left", fill="x", expand=True)
-            ttk.Button(row, text="Choose PDF", command=self._choose_pdf).pack(side="left", padx=(8, 0))
+            ttk.Button(row, text="Choose PDF/EPUB", command=self._choose_pdf).pack(side="left", padx=(8, 0))
             ttk.Button(row, text="Choose folder", command=self._choose_folder).pack(side="left", padx=(8, 0))
 
             options = ttk.LabelFrame(outer, text="Processing profile", padding=12)
@@ -170,11 +205,13 @@ def _run_gui() -> int:
             profiles = ttk.Frame(options)
             profiles.pack(fill="x")
             for name, desc in [
-                ("lite", "Lite — embedded PDF text; fastest and fully offline"),
-                ("standard", "Standard — PaddleOCR-VL + Docling when installed/cached"),
-                ("verified", "Verified — adds independent installed OCR/parser engines"),
+                ("lite", "Lite — native PDF + Document Structure Engine; fastest/offline"),
+                ("standard", "Standard — autonomous layout routing + PaddleOCR-VL/Docling when available"),
+                ("verified", "Verified — cross-family OCR/parser verification and abstention"),
             ]:
-                ttk.Radiobutton(profiles, text=desc, variable=self.profile, value=name).pack(anchor="w", pady=2)
+                enabled = name in supported_profiles(_bundle_profile())
+                ttk.Radiobutton(profiles, text=desc, variable=self.profile, value=name,
+                                state="normal" if enabled else "disabled").pack(anchor="w", pady=2)
             opts2 = ttk.Frame(options)
             opts2.pack(fill="x", pady=(10, 0))
             ttk.Checkbutton(
@@ -222,13 +259,13 @@ def _run_gui() -> int:
 
         def _choose_pdf(self):
             from tkinter import filedialog
-            value = filedialog.askopenfilename(title="Choose PDF", filetypes=[("PDF files", "*.pdf")])
+            value = filedialog.askopenfilename(title="Choose PDF", filetypes=[("Documents", "*.pdf *.epub"), ("PDF files", "*.pdf"), ("EPUB files", "*.epub")])
             if value:
                 self.input_path.set(value)
 
         def _choose_folder(self):
             from tkinter import filedialog
-            value = filedialog.askdirectory(title="Choose folder containing PDFs")
+            value = filedialog.askdirectory(title="Choose folder containing PDFs or EPUBs")
             if value:
                 self.input_path.set(value)
 
@@ -264,7 +301,7 @@ def _run_gui() -> int:
             from tkinter import messagebox
             raw = self.input_path.get().strip()
             if not raw:
-                messagebox.showerror("Input required", "Choose a PDF or a folder containing PDFs.")
+                messagebox.showerror("Input required", "Choose a PDF/EPUB or a folder containing documents.")
                 return
             inp = Path(raw)
             if not inp.exists():
@@ -306,9 +343,10 @@ def _run_gui() -> int:
                         self.last_output = Path(out)
                         self.progress.stop()
                         self.run_button.configure(state="normal")
-                        accepted = manifest.get("pages_accepted_after_dedupe", manifest.get("pages_accepted", "?"))
-                        rejected = manifest.get("pages_rejected", "?")
-                        self.status_text.set(f"Completed — accepted {accepted}, rejected {rejected}")
+                        accepted = manifest.get("pages_accepted_after_dedupe", "?")
+                        rejected = manifest.get("pages_rejected_or_reprocess", "?")
+                        review = manifest.get("pages_partial_held_for_review", "?")
+                        self.status_text.set(f"Completed — training {accepted}, review {review}, rejected {rejected}")
                         self._append_log(json.dumps(manifest, indent=2, sort_keys=True))
                         from tkinter import messagebox
                         if messagebox.askyesno("VeriCorpus complete", f"Processing completed.\n\nOutput:\n{out}\n\nOpen the output folder?"):
@@ -336,7 +374,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="vericorpus-desktop")
     parser.add_argument("--self-test", action="store_true", help="run a headless packaged-binary smoke test")
     parser.add_argument("--version", action="store_true", help="print version and exit")
+    parser.add_argument("--bundle-info", action="store_true", help="report installed engines and bundle profile")
     args = parser.parse_args(argv)
+    _prepare_bundle_runtime()
+    if args.bundle_info:
+        data = json.dumps(_bundle_info(), indent=2, sort_keys=True) + "\n"
+        output = os.environ.get("VERICORPUS_INFO_OUTPUT")
+        if output:
+            Path(output).write_text(data, encoding="utf-8")
+        print(data)
+        return 0
     if args.version:
         print(__version__)
         return 0

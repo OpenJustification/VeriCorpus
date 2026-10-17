@@ -57,7 +57,7 @@ def download_model(key: str, *, acknowledge_license: bool=False) -> dict:
     try:
         from huggingface_hub import hf_hub_download, snapshot_download
     except Exception as exc:
-        raise RuntimeError("Install VeriCorpus Full/model support (huggingface-hub) first") from exc
+        raise RuntimeError("Install VeriCorpus Standard/Verified model support (huggingface-hub) first") from exc
     target=model_path(key); target.mkdir(parents=True,exist_ok=True)
     common=dict(repo_id=item["id"],revision=item["revision"],local_dir=str(target))
     if item.get("filename"):

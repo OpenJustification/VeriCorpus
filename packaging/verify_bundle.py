@@ -28,7 +28,7 @@ def main() -> int:
         raise SystemExit("desktop binary self-test failed")
     last = (cp.stdout.strip().splitlines() or [""])[-1]
     data = json.loads(last)
-    if data.get("status") != "PASS" or data.get("version") != "0.1.0":
+    if data.get("status") != "PASS" or data.get("version") != "0.2.0a1":
         raise SystemExit(f"unexpected self-test result: {data}")
     print(json.dumps({"binary": str(exe), "sha256": sha256(exe), "self_test": data}, indent=2, sort_keys=True))
     return 0

@@ -1,0 +1,153 @@
+name: Windows EXE - Lite Standard Verified
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vericorpus-windows-three-profiles-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-build:
+    name: Windows x64 - ${{ matrix.profile }}
+    runs-on: windows-2025
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [lite, standard, verified]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python requirements
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw 'pip upgrade failed' }
+          if ('${{ matrix.profile }}' -eq 'lite') {
+            $req = 'packaging/requirements-bundle-lite.txt'
+          } else {
+            $req = 'packaging/requirements-bundle-full.txt'
+          }
+          python -m pip install --prefer-binary -r $req
+          if ($LASTEXITCODE -ne 0) { throw 'dependency installation failed' }
+          python -m pip install --no-deps .
+          if ($LASTEXITCODE -ne 0) { throw 'VeriCorpus installation failed' }
+          python -m pip install pyinstaller==6.22.3 pytest==9.0.2
+          if ($LASTEXITCODE -ne 0) { throw 'build/test-tool installation failed' }
+          python -m pip check
+          if ($LASTEXITCODE -ne 0) { throw 'Python dependency conflict' }
+
+      - name: Verify source
+        shell: pwsh
+        run: |
+          python -m pytest -q
+          if ($LASTEXITCODE -ne 0) { throw 'Source tests failed' }
+          python scripts/release_check.py
+          if ($LASTEXITCODE -ne 0) { throw 'Release checks failed' }
+          python -m vericorpus.desktop --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Source self-test failed' }
+
+      - name: Build profile-specific EXE
+        shell: pwsh
+        run: |
+          python scripts/build_desktop.py --flavor '${{ matrix.profile }}'
+          if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
+          if (-not (Test-Path dist/VeriCorpus/VeriCorpus.exe)) { throw 'VeriCorpus.exe not produced' }
+
+      - name: Add independent Tesseract witness (Verified only)
+        if: matrix.profile == 'verified'
+        shell: pwsh
+        run: .\packaging\stage_tesseract_windows.ps1
+
+      - name: Test packaged executable and selected bundle profile
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path '.\dist\VeriCorpus\VeriCorpus.exe').Path
+          $env:VERICORPUS_SELFTEST_OUTPUT = Join-Path $PWD 'packaged-selftest.json'
+          $proc = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "EXE self-test failed: $($proc.ExitCode)" }
+          if (-not (Test-Path $env:VERICORPUS_SELFTEST_OUTPUT)) { throw 'No self-test JSON written' }
+          $smoke = Get-Content $env:VERICORPUS_SELFTEST_OUTPUT -Raw | ConvertFrom-Json
+          if ($smoke.status -ne 'PASS' -or $smoke.version -ne '0.2.0a1' -or $smoke.pages -ne 1) {
+            throw ('Unexpected self-test: ' + ($smoke | ConvertTo-Json -Compress))
+          }
+          $env:VERICORPUS_INFO_OUTPUT = Join-Path $PWD 'packaged-bundle-info.json'
+          $proc = Start-Process -FilePath $exe -ArgumentList '--bundle-info' -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "EXE bundle-info failed: $($proc.ExitCode)" }
+          if (-not (Test-Path $env:VERICORPUS_INFO_OUTPUT)) { throw 'Bundle info JSON missing' }
+          $info = Get-Content $env:VERICORPUS_INFO_OUTPUT -Raw | ConvertFrom-Json
+          if ($info.bundle_profile -ne '${{ matrix.profile }}') { throw 'Incorrect default bundled profile' }
+          if ('${{ matrix.profile }}' -eq 'verified' -and -not $info.engines.tesseract) {
+            throw 'Verified EXE missing independent Tesseract witness'
+          }
+          Get-Content $env:VERICORPUS_INFO_OUTPUT
+
+      - name: Scan EXE bundle with Microsoft Defender
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidates = @("$env:ProgramFiles\Windows Defender\MpCmdRun.exe")
+          $base = "$env:ProgramData\Microsoft\Windows Defender\Platform"
+          if (Test-Path $base) {
+            $candidates += @(Get-ChildItem $base -Recurse -Filter MpCmdRun.exe -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTime -Descending | Select-Object -ExpandProperty FullName)
+          }
+          $scanner = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $scanner) { throw 'Windows Defender scanner unavailable' }
+          & $scanner -Scan -ScanType 3 -File (Resolve-Path '.\dist\VeriCorpus').Path -DisableRemediation
+          if ($LASTEXITCODE -ne 0) { throw "Defender scan failed or malware detected ($LASTEXITCODE)" }
+
+      - name: Package ZIP, checksums and build manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Copy-Item LICENSE, NOTICE, THIRD_PARTY_LICENSES.md, README.md -Destination dist/VeriCorpus/
+          $info = @{
+            version = '0.2.0a1'; profile = '${{ matrix.profile }}'; runner = 'windows-2025';
+            git_sha = '${{ github.sha }}'; python = '3.12'; pyinstaller = '6.22.3';
+            build_kind = 'PyInstaller onedir'; model_weights_included = $false
+          }
+          $info | ConvertTo-Json | Set-Content dist/VeriCorpus/BUILD_INFO.json -Encoding UTF8
+          python -m pip freeze | Set-Content dist/VeriCorpus/python-freeze.txt -Encoding UTF8
+          $name = 'VeriCorpus-0.2.0-Windows-x64-${{ matrix.profile }}'
+          Compress-Archive -Path dist/VeriCorpus/* -DestinationPath "$name.zip" -CompressionLevel Optimal -Force
+          if (-not (Test-Path "$name.zip")) { throw 'No ZIP created' }
+          $sha = (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha  $name.zip" | Set-Content "$name.zip.sha256" -Encoding ascii
+
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VeriCorpus-0.2.0-Windows-x64-${{ matrix.profile }}
+          path: |
+            VeriCorpus-0.2.0-Windows-x64-${{ matrix.profile }}.zip
+            VeriCorpus-0.2.0-Windows-x64-${{ matrix.profile }}.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload PyInstaller diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.profile }}-diagnostics
+          path: |
+            build/
+            packaged-selftest.json
+            packaged-bundle-info.json
+          if-no-files-found: ignore

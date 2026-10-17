@@ -9,7 +9,7 @@ import sys
 
 def build_args(flavor: str) -> list[str]:
     flavor = flavor.strip().lower()
-    if flavor not in {"lite", "full"}:
+    if flavor not in {"lite", "standard", "verified"}:
         raise ValueError(f"Unsupported bundle flavor: {flavor}")
 
     args = [
@@ -40,7 +40,7 @@ def build_args(flavor: str) -> list[str]:
         "packaging/desktop_entry.py",
     ]
 
-    if flavor == "full":
+    if flavor in {"standard", "verified"}:
         for package in [
             "paddle",
             "paddleocr",
@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--flavor",
-        choices=("lite", "full"),
+        choices=("lite", "standard", "verified"),
         default=os.environ.get("VERICORPUS_BUNDLE", "lite"),
     )
     parser.add_argument("--print-only", action="store_true")
@@ -92,6 +92,15 @@ def main(argv: list[str] | None = None) -> int:
     expected = Path("dist") / "VeriCorpus"
     if not expected.exists():
         raise RuntimeError(f"PyInstaller completed but {expected} was not created")
+    # Explicit runtime capability marker. Used by desktop app to restrict its profile selector.
+    from vericorpus import __version__
+    import json
+    from vericorpus.desktop import supported_profiles
+    profile_file = expected / "BUNDLE_PROFILE.json"
+    profile_file.write_text(json.dumps({"version": __version__, "bundle_profile": ns.flavor,
+        "supported_profiles": supported_profiles(ns.flavor),
+        "note": "Model weights and independent external OCR tools are not necessarily bundled."},
+        indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return 0
 
 

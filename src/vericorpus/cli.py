@@ -14,7 +14,10 @@ from .config import Settings, settings_for_profile
 from .model_registry import load_registry, validate_registry
 from .optional_adapters import availability
 from .pipeline import prepare as run_prepare
+from .layout import analyze_page
+from .groundtruth import write_groundtruth
 from .plugins import discover_extractor_plugins
+from .corpus import validate_run
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
@@ -35,7 +38,7 @@ def prepare_command(
     seed: int = typer.Option(20261016, "--seed"),
     dpi: int = typer.Option(300, "--dpi", min=150, max=600),
 ) -> None:
-    """Prepare PDFs using a named local profile. Standard is the full desktop-app profile."""
+    """Prepare PDFs or EPUBs using a named local profile. The Standard bundle provides the optional OCR Python dependencies."""
     settings = settings_for_profile(
         profile,
         seed=seed,
@@ -82,6 +85,15 @@ def doctor_command() -> None:
     console.print_json(data=report)
 
 
+@app.command("verify-output")
+def verify_output_command(out: Path = typer.Argument(..., exists=True, file_okay=False)) -> None:
+    """Validate checksums, provenance, training readiness and document-disjoint splits."""
+    result = validate_run(out)
+    console.print_json(data=result)
+    if result["status"] != "PASS":
+        raise typer.Exit(1)
+
+
 @app.command("version")
 def version_command() -> None:
     """Print the VeriCorpus version."""
@@ -95,6 +107,35 @@ def benchmark_command(
 ) -> None:
     """Compare training JSONL with a gold-standard JSONL."""
     console.print_json(data=evaluate_jsonl(predicted, gold))
+
+
+@app.command("inspect-layout")
+def inspect_layout_command(
+    pdf: Path = typer.Argument(..., exists=True, readable=True),
+    page: int = typer.Option(1, "--page", "-p", min=1),
+) -> None:
+    """Inspect VeriCorpus Document Structure Engine output for one PDF page."""
+    import fitz
+
+    doc = fitz.open(pdf)
+    try:
+        if page > len(doc):
+            raise typer.BadParameter(f"PDF has only {len(doc)} page(s)")
+        structure = analyze_page(doc[page - 1], page)
+        console.print_json(data=structure.model_dump())
+    finally:
+        doc.close()
+
+
+@app.command("groundtruth")
+def groundtruth_command(
+    source: Path = typer.Argument(..., exists=True, readable=True, help="LaTeX, JATS XML, or DOCX source manuscript"),
+    pdf: Path = typer.Argument(..., exists=True, readable=True, help="Rendered/published PDF to align against"),
+    out: Path = typer.Option(Path("vericorpus_groundtruth.jsonl"), "--out", "-o"),
+) -> None:
+    """Create object labels from structured submission files and align text anchors to the PDF."""
+    result = write_groundtruth(source, pdf, out)
+    console.print_json(data=result)
 
 
 if __name__ == "__main__":

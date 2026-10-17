@@ -11,7 +11,7 @@ body:
     id: version
     attributes:
       label: VeriCorpus version
-      placeholder: "0.1.0"
+      placeholder: "0.2.0a1"
     validations:
       required: true
   - type: input

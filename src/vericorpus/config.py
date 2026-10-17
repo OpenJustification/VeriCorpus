@@ -20,13 +20,23 @@ class Settings:
     use_qwen_judge: bool = False
     use_nemotron_judge: bool = False
 
+    # 0.2 autonomous routing / Document Structure Engine.
+    use_document_structure_engine: bool = True
+    auto_route_complex_pages: bool = True
+    auto_use_tesseract_on_complex: bool = True
+    complex_page_threshold: float = 0.38
+
     native_good_threshold: float = 0.88
     min_engine_confidence: float = 0.50
     span_agreement_threshold: float = 0.93
-    page_accept_quality: float = 0.80
+    page_accept_quality: float = 0.82
     render_dpi: int = 300
     disagreement_context_chars: int = 220
     reject_page_if_unresolved_fraction_gt: float = 0.15
+
+    # Human-readable exports are cheap and enabled by default.
+    write_pretty_json: bool = True
+    write_review_markdown: bool = True
 
     # Fixed decoding settings for local generative adjudicators.
     temperature: float = 0.0
@@ -35,7 +45,11 @@ class Settings:
 
 
 def settings_for_profile(profile: str, **overrides) -> Settings:
-    """Return conservative desktop defaults for a named local profile."""
+    """Return conservative desktop defaults for a named local profile.
+
+    Profiles define the maximum parser set. The router decides which permitted
+    engines a page actually needs after object/layout identification.
+    """
     name = profile.lower().strip()
     if name == "lite":
         base = Settings(
@@ -45,6 +59,7 @@ def settings_for_profile(profile: str, **overrides) -> Settings:
             use_docling=False,
             use_glmocr=False,
             use_olmocr=False,
+            auto_use_tesseract_on_complex=False,
         )
     elif name == "standard":
         base = Settings(
@@ -54,6 +69,7 @@ def settings_for_profile(profile: str, **overrides) -> Settings:
             use_docling=True,
             use_glmocr=False,
             use_olmocr=False,
+            auto_use_tesseract_on_complex=True,
         )
     elif name == "verified":
         base = Settings(
@@ -63,10 +79,9 @@ def settings_for_profile(profile: str, **overrides) -> Settings:
             use_docling=True,
             use_glmocr=True,
             use_olmocr=True,
-            # Qwen/Nemotron remain optional adjudicator packs until their local
-            # runtimes pass the same integration-test bar as the parser stack.
             use_qwen_judge=False,
             use_nemotron_judge=False,
+            auto_use_tesseract_on_complex=True,
         )
     else:
         raise ValueError(f"Unknown profile: {profile}")

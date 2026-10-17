@@ -59,7 +59,7 @@
       "downloadable": false,
       "integration_status": "tracked-not-active",
       "notes": "Current OmniDocBench maintainer leaderboard places OvisOCR2 just above PaddleOCR-VL 1.6. Tracked for a future portable integration after pinned Windows/GPU/CPU runtime tests.",
-      "revision_policy": "Not used by VeriCorpus 0.1.0; resolve to a full immutable commit before activation."
+      "revision_policy": "Not used by VeriCorpus 0.2.0-alpha; resolve to a full immutable commit before activation."
     },
     {
       "key": "teleocr",
@@ -74,7 +74,7 @@
       "downloadable": false,
       "integration_status": "tracked-not-active",
       "notes": "Current OmniDocBench maintainer leaderboard leader. Not a default dependency because the upstream path uses custom model code and a less portable runtime; VeriCorpus will not enable it until the exact revision is security- and integration-tested.",
-      "revision_policy": "Not used by VeriCorpus 0.1.0; resolve to a full immutable commit and review custom code before activation."
+      "revision_policy": "Not used by VeriCorpus 0.2.0-alpha; resolve to a full immutable commit and review custom code before activation."
     }
   ]
 }
