@@ -1,53 +1,38 @@
-VeriCorpus 0.1.0 — Windows Windowed EXE Fix
+VeriCorpus 0.1.0 — Windows GUI Wait Fix
 
-WHAT FAILED
------------
-The latest Windows Lite job successfully:
-- installed dependencies,
-- passed source checks,
-- built the PyInstaller application,
-- added release files.
+ROOT CAUSE
+----------
+VeriCorpus.exe is built with PyInstaller --windowed, so Windows treats it as
+a Win32 GUI application.
 
-It then failed at:
-    Smoke-test packaged Windows executable
+PowerShell can return control before a GUI executable exits when invoked
+directly with:
 
-WHY
----
-VeriCorpus is intentionally built as a Windows GUI application using
-PyInstaller --windowed/--noconsole.
+    & .\dist\VeriCorpus\VeriCorpus.exe --self-test
 
-On Windows, PyInstaller sets sys.stdin/sys.stdout/sys.stderr to None in that
-mode. VeriCorpus's packaged self-test (and potentially imported libraries)
-can write to standard streams, which can trigger a NoneType stream error.
+That allows the workflow to inspect $LASTEXITCODE and desktop-selftest.json
+before VeriCorpus has actually finished.
 
 FIX
 ---
-packaging/desktop_entry.py now creates harmless os.devnull-backed streams
-BEFORE importing VeriCorpus if the standard streams are unavailable.
+The Windows workflows now use:
 
-This is the workaround recommended by PyInstaller for windowed Windows apps.
+    Start-Process -Wait -PassThru
 
-A regression test simulates missing console streams.
-
-The Windows GitHub smoke-test step also now prints desktop-selftest.json before
-failing, so any future executable error is directly visible in the Actions log.
+This waits for the GUI executable to finish, captures the real process exit
+code, and only then validates desktop-selftest.json.
 
 FILES
 -----
-packaging/desktop_entry.py
-tests/test_windowed_entry.py
 .github/workflows/desktop-build.yml
+.github/workflows/release.yml
 
 APPLY
 -----
 1. Extract this ZIP.
-2. Copy its contents into your local VeriCorpus repository.
-3. Replace packaging/desktop_entry.py and .github/workflows/desktop-build.yml.
-4. Add tests/test_windowed_entry.py.
-5. GitHub Desktop commit:
-       Fix Windows windowed executable self-test
-6. Push origin.
-7. Actions -> Desktop bundles -> Run workflow.
-
-The Linux Lite artifact from the previous run already built successfully, so
-this patch is deliberately Windows-focused.
+2. Copy its `.github` folder into your local VeriCorpus repository.
+3. Replace both workflow files.
+4. Commit in GitHub Desktop:
+       Fix Windows GUI self-test wait
+5. Push origin.
+6. GitHub -> Actions -> Desktop bundles -> Run workflow.

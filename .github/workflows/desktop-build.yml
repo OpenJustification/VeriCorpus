@@ -121,10 +121,22 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $env:VERICORPUS_SELFTEST_OUTPUT = "$pwd\desktop-selftest.json"
           Remove-Item desktop-selftest.json -ErrorAction SilentlyContinue
-          & .\dist\VeriCorpus\VeriCorpus.exe --self-test
-          $exitCode = $LASTEXITCODE
+
+          $exe = (Resolve-Path ".\dist\VeriCorpus\VeriCorpus.exe").Path
+          Write-Host "Launching packaged GUI executable synchronously: $exe"
+
+          $proc = Start-Process `
+            -FilePath $exe `
+            -ArgumentList "--self-test" `
+            -WorkingDirectory "$pwd" `
+            -Wait `
+            -PassThru
+
+          $exitCode = $proc.ExitCode
+          Write-Host "VeriCorpus.exe exit code: $exitCode"
 
           if (Test-Path desktop-selftest.json) {
             Write-Host "Packaged self-test result:"
@@ -133,8 +145,12 @@ jobs:
             Write-Host "Packaged executable did not create desktop-selftest.json"
           }
 
-          if ($exitCode -ne 0) { throw "Packaged Windows self-test failed with exit code $exitCode" }
-          if (-not (Test-Path desktop-selftest.json)) { throw "Packaged Windows self-test produced no result file" }
+          if ($exitCode -ne 0) {
+            throw "Packaged Windows self-test failed with exit code $exitCode"
+          }
+          if (-not (Test-Path desktop-selftest.json)) {
+            throw "Packaged Windows self-test exited successfully but produced no result file"
+          }
 
           $r = Get-Content desktop-selftest.json | ConvertFrom-Json
           if ($r.status -ne "PASS" -or $r.version -ne "0.1.0") {
