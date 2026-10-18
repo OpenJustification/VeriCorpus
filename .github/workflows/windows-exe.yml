@@ -11,7 +11,6 @@ permissions:
 concurrency:
   group: vericorpus-windows-three-profiles-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   windows-build:
     name: Windows x64 - ${{ matrix.profile }}
@@ -23,15 +22,14 @@ jobs:
         profile: [lite, standard, verified]
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-
       - name: Install Python requirements
         shell: pwsh
         run: |
@@ -51,7 +49,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'build/test-tool installation failed' }
           python -m pip check
           if ($LASTEXITCODE -ne 0) { throw 'Python dependency conflict' }
-
       - name: Verify source
         shell: pwsh
         run: |
@@ -61,7 +58,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Release checks failed' }
           python -m vericorpus.desktop --self-test
           if ($LASTEXITCODE -ne 0) { throw 'Source self-test failed' }
-
       - name: Build profile-specific EXE
         shell: pwsh
         run: |
@@ -73,7 +69,6 @@ jobs:
         if: matrix.profile == 'verified'
         shell: pwsh
         run: .\packaging\stage_tesseract_windows.ps1
-
       - name: Test packaged executable and selected bundle profile
         shell: pwsh
         run: |
@@ -97,7 +92,6 @@ jobs:
             throw 'Verified EXE missing independent Tesseract witness'
           }
           Get-Content $env:VERICORPUS_INFO_OUTPUT
-
       - name: Scan EXE bundle with Microsoft Defender
         shell: pwsh
         run: |
@@ -112,7 +106,6 @@ jobs:
           if (-not $scanner) { throw 'Windows Defender scanner unavailable' }
           & $scanner -Scan -ScanType 3 -File (Resolve-Path '.\dist\VeriCorpus').Path -DisableRemediation
           if ($LASTEXITCODE -ne 0) { throw "Defender scan failed or malware detected ($LASTEXITCODE)" }
-
       - name: Package ZIP, checksums and build manifest
         shell: pwsh
         run: |
@@ -130,9 +123,8 @@ jobs:
           if (-not (Test-Path "$name.zip")) { throw 'No ZIP created' }
           $sha = (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
           "$sha  $name.zip" | Set-Content "$name.zip.sha256" -Encoding ascii
-
       - name: Upload executable artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: VeriCorpus-0.2.0-Windows-x64-${{ matrix.profile }}
           path: |
@@ -140,10 +132,9 @@ jobs:
             VeriCorpus-0.2.0-Windows-x64-${{ matrix.profile }}.zip.sha256
           if-no-files-found: error
           retention-days: 30
-
       - name: Upload PyInstaller diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-${{ matrix.profile }}-diagnostics
           path: |

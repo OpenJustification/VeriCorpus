@@ -11,7 +11,6 @@ on:
 
 permissions:
   contents: read
-
 jobs:
   desktop:
     strategy:
@@ -43,11 +42,10 @@ jobs:
             flavor: verified
             archive: tar
     runs-on: ${{ matrix.os }}
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12.10"
           cache: pip
@@ -57,7 +55,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-tk libgl1 libglib2.0-0 libgomp1 tesseract-ocr clamav
-
       - name: Install pinned build/runtime dependencies
         shell: bash
         run: |
@@ -76,7 +73,6 @@ jobs:
           python -m pip install --no-deps .
           python -m pip install pyinstaller==6.22.3 pip-licenses==5.0.0
           python -m pip check
-
       - name: Source smoke test
         shell: bash
         run: |
@@ -91,7 +87,6 @@ jobs:
         run: |
           set -euxo pipefail
           python scripts/build_desktop.py --flavor "${{ matrix.flavor }}"
-
       - name: Add Tesseract for Verified Windows
         if: runner.os == 'Windows' && matrix.flavor == 'verified'
         shell: pwsh
@@ -99,14 +94,13 @@ jobs:
 
       - name: Upload PyInstaller diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pyinstaller-diagnostics-${{ matrix.platform }}-${{ matrix.flavor }}
           path: |
             build/
             *.log
           if-no-files-found: ignore
-
       - name: Add release documentation and inventories
         shell: bash
         run: |
@@ -129,7 +123,6 @@ jobs:
           PY
         env:
           BUNDLE_FLAVOR: ${{ matrix.flavor }}
-
       - name: Smoke-test packaged Windows executable
         if: runner.os == 'Windows'
         shell: pwsh
@@ -140,7 +133,6 @@ jobs:
 
           $exe = (Resolve-Path ".\dist\VeriCorpus\VeriCorpus.exe").Path
           Write-Host "Launching packaged GUI executable synchronously: $exe"
-
           $proc = Start-Process `
             -FilePath $exe `
             -ArgumentList "--self-test" `
@@ -150,26 +142,22 @@ jobs:
 
           $exitCode = $proc.ExitCode
           Write-Host "VeriCorpus.exe exit code: $exitCode"
-
           if (Test-Path desktop-selftest.json) {
             Write-Host "Packaged self-test result:"
             Get-Content desktop-selftest.json
           } else {
             Write-Host "Packaged executable did not create desktop-selftest.json"
           }
-
           if ($exitCode -ne 0) {
             throw "Packaged Windows self-test failed with exit code $exitCode"
           }
           if (-not (Test-Path desktop-selftest.json)) {
             throw "Packaged Windows self-test exited successfully but produced no result file"
           }
-
           $r = Get-Content desktop-selftest.json | ConvertFrom-Json
           if ($r.status -ne "PASS" -or $r.version -ne "0.2.0a1") {
             throw "Unexpected packaged self-test result: $($r | ConvertTo-Json -Compress)"
           }
-
       - name: Microsoft Defender scan
         if: runner.os == 'Windows'
         shell: pwsh
@@ -184,7 +172,6 @@ jobs:
           if (-not $mp) { throw "Microsoft Defender command-line scanner not available on runner" }
           & $mp -Scan -ScanType 3 -File (Resolve-Path .\dist\VeriCorpus).Path -DisableRemediation
           if ($LASTEXITCODE -ne 0) { throw "Microsoft Defender scan returned exit code $LASTEXITCODE" }
-
       - name: Smoke-test packaged Linux executable
         if: runner.os == 'Linux'
         run: |
@@ -195,7 +182,6 @@ jobs:
           d=json.load(open('desktop-selftest.json', encoding='utf-8'))
           assert d['status']=='PASS' and d['version']=='0.2.0a1', d
           PY
-
       - name: ClamAV scan
         if: runner.os == 'Linux'
         run: |
@@ -206,7 +192,6 @@ jobs:
           set -e
           if [ "$code" -eq 1 ]; then echo "Malware signature detected"; exit 1; fi
           if [ "$code" -gt 1 ]; then echo "ClamAV scanner error code $code"; exit "$code"; fi
-
       - name: Create Windows archive and checksum
         if: runner.os == 'Windows'
         shell: pwsh
@@ -215,15 +200,13 @@ jobs:
           Compress-Archive -Path .\dist\VeriCorpus\* -DestinationPath "$name.zip" -CompressionLevel Optimal
           $hash = (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLower()
           "$hash  $name.zip" | Out-File -Encoding ascii "$name.zip.sha256"
-
       - name: Create Linux archive and checksum
         if: runner.os == 'Linux'
         run: |
           name="VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}"
           tar -C dist -czf "$name.tar.gz" VeriCorpus
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
-
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}
           path: |

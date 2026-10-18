@@ -9,13 +9,12 @@ permissions:
   contents: write
   id-token: write
   attestations: write
-
 jobs:
   verify-source:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12.10"
           cache: pip
@@ -39,11 +38,10 @@ jobs:
           python -m twine check dist/*
           pip-licenses --format=json --output-file=dist/python-license-inventory.json
           cd dist && sha256sum * > SHA256SUMS.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-dist
           path: dist/*
-
   desktop:
     needs: verify-source
     strategy:
@@ -70,18 +68,16 @@ jobs:
             flavor: verified
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12.10"
           cache: pip
-
       - name: Install Linux desktop system libraries
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-tk libgl1 libglib2.0-0 libgomp1 tesseract-ocr clamav
-
       - name: Install desktop build environment
         shell: bash
         run: |
@@ -95,7 +91,6 @@ jobs:
           python -m pip install --no-deps .
           python -m pip install pyinstaller==6.22.3 pip-licenses==5.0.0
           python -m pip check
-
       - name: Build desktop application
         shell: bash
         env:
@@ -103,7 +98,6 @@ jobs:
         run: |
           set -euxo pipefail
           python scripts/build_desktop.py --flavor "${{ matrix.flavor }}"
-
       - name: Add licenses and build inventory
         shell: bash
         env:
@@ -127,12 +121,10 @@ jobs:
           }
           Path("dist/VeriCorpus/BUILD_INFO.json").write_text(json.dumps(info,indent=2,sort_keys=True)+"\n",encoding="utf-8")
           PY
-
       - name: Add Tesseract for Verified Windows
         if: runner.os == 'Windows' && matrix.flavor == 'verified'
         shell: pwsh
         run: .\packaging\stage_tesseract_windows.ps1
-
       - name: Packaged executable self-test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -144,7 +136,6 @@ jobs:
           if ($exitCode -ne 0) { throw "Packaged Windows self-test failed with exit code $exitCode" }
           $r = Get-Content desktop-selftest.json | ConvertFrom-Json
           if ($r.status -ne "PASS" -or $r.version -ne "0.2.0a1") { throw "Unexpected self-test result" }
-
       - name: Microsoft Defender release gate
         if: runner.os == 'Windows'
         shell: pwsh
@@ -159,7 +150,6 @@ jobs:
           if (-not $mp) { throw "Microsoft Defender command-line scanner not available on runner" }
           & $mp -Scan -ScanType 3 -File (Resolve-Path .\dist\VeriCorpus).Path -DisableRemediation
           if ($LASTEXITCODE -ne 0) { throw "Microsoft Defender scan returned exit code $LASTEXITCODE" }
-
       - name: Packaged executable self-test (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -170,7 +160,6 @@ jobs:
           d=json.load(open('desktop-selftest.json', encoding='utf-8'))
           assert d['status']=='PASS' and d['version']=='0.2.0a1', d
           PY
-
       - name: ClamAV release gate
         if: runner.os == 'Linux'
         run: |
@@ -181,7 +170,6 @@ jobs:
           set -e
           if [ "$code" -eq 1 ]; then echo "Malware signature detected"; exit 1; fi
           if [ "$code" -gt 1 ]; then echo "ClamAV scanner error code $code"; exit "$code"; fi
-
       - name: Archive Windows bundle
         if: runner.os == 'Windows'
         shell: pwsh
@@ -190,7 +178,6 @@ jobs:
           Compress-Archive -Path .\dist\VeriCorpus\* -DestinationPath "$name.zip" -CompressionLevel Optimal
           $hash=(Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLower()
           "$hash  $name.zip" | Out-File -Encoding ascii "$name.zip.sha256"
-
       - name: Archive Linux bundle
         if: runner.os == 'Linux'
         run: |
@@ -202,13 +189,11 @@ jobs:
         if: runner.os == 'Windows'
         with:
           subject-path: VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}.zip
-
       - uses: actions/attest-build-provenance@v4
         if: runner.os == 'Linux'
         with:
           subject-path: VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz
-
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.platform }}-${{ matrix.flavor }}
           path: |
@@ -217,13 +202,12 @@ jobs:
             VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz
             VeriCorpus-0.2.0-${{ matrix.platform }}-${{ matrix.flavor }}.tar.gz.sha256
           if-no-files-found: ignore
-
   release:
     needs: [verify-source, desktop]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: release-assets
           merge-multiple: true
