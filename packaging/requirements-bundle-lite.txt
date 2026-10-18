@@ -1,4 +1,4 @@
-PyMuPDF==1.26.7
+PyMuPDF==1.28.2
 Pillow==12.3.0
 pytesseract==0.3.13
 pydantic==2.13.5
