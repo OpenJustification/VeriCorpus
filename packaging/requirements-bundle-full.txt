@@ -1,7 +1,7 @@
 PyMuPDF==1.26.7
 Pillow==12.3.0
 pytesseract==0.3.13
-pydantic==2.13.5
+pydantic==2.14.1
 typer==0.26.3
 rich==15.0.0
 paddleocr==3.7.0
